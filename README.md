@@ -25,10 +25,6 @@ Interactive visual explainers for IT protocols — learn by seeing them in actio
 
 Each protocol gets its own interactive web visualization — no server needed, pure HTML/CSS/JS. Built for learning, teaching, and YouTube content.
 
-## Contributing
-
-PRs welcome! Each protocol lives in its own folder with a standalone `index.html`.
-
 ## License
 
 MIT
