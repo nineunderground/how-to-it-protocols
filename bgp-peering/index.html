@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BGP Peering — How-To IT Protocols</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0e17;
+            color: #e0e6ed;
+            min-height: 100vh;
+            padding: 30px 20px;
+        }
+        .back { color: #7b2ff7; text-decoration: none; font-size: 0.9rem; }
+        .back:hover { text-decoration: underline; }
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            margin: 20px 0 8px;
+            background: linear-gradient(135deg, #00d2ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .desc {
+            text-align: center;
+            color: #8892a4;
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+            max-width: 650px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .canvas-wrapper { max-width: 800px; margin: 0 auto; position: relative; }
+        .diagram {
+            position: relative;
+            height: 520px;
+            background: #101620;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        /* AS boxes */
+        .as-box {
+            position: absolute;
+            top: 20px;
+            width: 160px;
+            text-align: center;
+            padding: 14px 8px;
+            border-radius: 12px;
+            border: 1px solid #1e2a3a;
+            background: #141a26;
+        }
+        .as-box.left { left: 30px; }
+        .as-box.right { right: 30px; }
+        .as-box .icon { font-size: 2rem; margin-bottom: 4px; }
+        .as-box .label { font-weight: 600; font-size: 0.95rem; }
+        .as-box .sublabel { font-size: 0.72rem; color: #8892a4; margin-top: 2px; }
+        .as-box .prefixes {
+            margin-top: 8px;
+            font-size: 0.7rem;
+            color: #4a5568;
+            font-family: 'Courier New', monospace;
+        }
+        .as-box .prefixes.visible { color: #00e676; }
+
+        /* Timelines */
+        .timeline {
+            position: absolute;
+            top: 145px;
+            bottom: 20px;
+            width: 2px;
+            background: #1e2a3a;
+        }
+        .timeline.left-line { left: 110px; }
+        .timeline.right-line { right: 110px; }
+
+        /* Packets */
+        .packet {
+            position: absolute;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.78rem;
+            font-weight: 600;
+            border-radius: 8px;
+            opacity: 0;
+            pointer-events: none;
+            white-space: nowrap;
+            padding: 0 12px;
+        }
+        .packet.open {
+            background: rgba(0, 210, 255, 0.15);
+            border: 1px solid #00d2ff;
+            color: #00d2ff;
+        }
+        .packet.keepalive {
+            background: rgba(123, 47, 247, 0.15);
+            border: 1px solid #7b2ff7;
+            color: #a78bfa;
+        }
+        .packet.update {
+            background: rgba(0, 230, 118, 0.15);
+            border: 1px solid #00e676;
+            color: #00e676;
+        }
+        .packet.withdraw {
+            background: rgba(248, 113, 113, 0.15);
+            border: 1px solid #f87171;
+            color: #f87171;
+        }
+
+        /* State badges */
+        .state {
+            position: absolute;
+            font-size: 0.68rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+        .state.visible { opacity: 1; }
+        .state.left-state { left: 40px; }
+        .state.right-state { right: 40px; }
+        .state.idle { background: #2d1f1f; color: #f87171; }
+        .state.connect { background: #1f2535; color: #00d2ff; }
+        .state.open-sent { background: #1f2535; color: #38bdf8; }
+        .state.open-confirm { background: #251f35; color: #a78bfa; }
+        .state.established { background: #1f2d1f; color: #00e676; }
+
+        /* Route table overlay */
+        .route-table {
+            position: absolute;
+            bottom: 10px;
+            font-size: 0.65rem;
+            font-family: 'Courier New', monospace;
+            color: #4a5568;
+            padding: 6px 10px;
+            background: #0a0e17;
+            border-radius: 6px;
+            opacity: 0;
+            transition: opacity 0.5s;
+            max-width: 180px;
+            line-height: 1.5;
+        }
+        .route-table.visible { opacity: 1; }
+        .route-table.left-rt { left: 20px; }
+        .route-table.right-rt { right: 20px; }
+        .route-table .rt-title { color: #8892a4; font-weight: 600; margin-bottom: 2px; }
+        .route-table .rt-row { color: #00e676; }
+        .route-table .rt-row.best { color: #fbbf24; }
+        .route-table .rt-row.withdrawn { color: #f87171; text-decoration: line-through; }
+
+        /* Step info */
+        .step-info {
+            max-width: 800px;
+            margin: 20px auto 0;
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 24px;
+            min-height: 120px;
+        }
+        .step-info h3 { font-size: 1.1rem; margin-bottom: 8px; }
+        .step-info p { color: #8892a4; line-height: 1.6; font-size: 0.92rem; }
+        .step-info .detail {
+            margin-top: 12px;
+            padding: 12px;
+            background: #0a0e17;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: #a0aec0;
+            white-space: pre-wrap;
+        }
+
+        /* Controls */
+        .controls {
+            max-width: 800px;
+            margin: 20px auto 0;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        button {
+            padding: 10px 28px;
+            border: 1px solid #1e2a3a;
+            border-radius: 8px;
+            background: #141a26;
+            color: #e0e6ed;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover { border-color: #7b2ff7; background: #1a2236; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        button.primary { background: #7b2ff7; border-color: #7b2ff7; color: #fff; }
+        button.primary:hover { background: #6b21e8; }
+
+        .seq-display {
+            max-width: 800px;
+            margin: 12px auto 0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: #4a5568;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Try it yourself */
+        .try-it { max-width: 800px; margin: 40px auto 0; }
+        .try-it h2 { font-size: 1.5rem; margin-bottom: 8px; }
+        .try-desc { color: #8892a4; margin-bottom: 20px; font-size: 0.92rem; }
+        .terminal-tabs { display: flex; gap: 4px; margin-bottom: 0; }
+        .tab {
+            padding: 8px 20px;
+            border: 1px solid #1e2a3a;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: #101620;
+            color: #8892a4;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .tab.active { background: #141a26; color: #e0e6ed; border-color: #1e2a3a; }
+        .terminal-panel {
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 0 12px 12px 12px;
+            padding: 24px;
+        }
+        .terminal-panel.hidden { display: none; }
+        .term-step { margin-bottom: 20px; }
+        .term-step:last-child { margin-bottom: 0; }
+        .term-badge {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .tool-badge { background: #1f2535; color: #00d2ff; }
+        .web-badge { background: #251f35; color: #a78bfa; }
+        .observe-badge { background: #2d2a1f; color: #fbbf24; }
+        .term-block {
+            background: #0a0e17;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+        }
+        .term-header { font-size: 0.82rem; color: #8892a4; margin-bottom: 8px; }
+        .term-block pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #e0e6ed;
+        }
+        .term-block .prompt { color: #4ade80; }
+        .term-block .comment { color: #4a5568; }
+        .term-note {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: rgba(123, 47, 247, 0.08);
+            border-left: 3px solid #7b2ff7;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.85rem;
+            color: #a0aec0;
+        }
+        .term-note code {
+            background: #0a0e17;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.82rem;
+        }
+    </style>
+</head>
+<body>
+    <a href="../" class="back">← Back to protocols</a>
+    <h1>🌐 BGP Peering</h1>
+    <p class="desc">How two Autonomous Systems establish a BGP session, exchange routes, select best paths, and handle route withdrawals.</p>
+
+    <div class="canvas-wrapper">
+        <div class="diagram" id="diagram">
+            <!-- AS boxes -->
+            <div class="as-box left">
+                <div class="icon">🏢</div>
+                <div class="label">AS 64500</div>
+                <div class="sublabel">ISP Alpha · 10.0.0.1</div>
+                <div class="prefixes" id="prefixes-left">203.0.113.0/24<br>198.51.100.0/24</div>
+            </div>
+            <div class="as-box right">
+                <div class="icon">🏢</div>
+                <div class="label">AS 64501</div>
+                <div class="sublabel">ISP Beta · 10.0.0.2</div>
+                <div class="prefixes" id="prefixes-right">192.0.2.0/24</div>
+            </div>
+
+            <!-- Timelines -->
+            <div class="timeline left-line"></div>
+            <div class="timeline right-line"></div>
+
+            <!-- State badges -->
+            <div class="state idle left-state visible" id="left-state" style="top: 148px;">IDLE</div>
+            <div class="state idle right-state visible" id="right-state" style="top: 148px;">IDLE</div>
+
+            <!-- Packets -->
+            <div class="packet open" id="pkt-open1">OPEN  AS64500, HoldTime=180</div>
+            <div class="packet open" id="pkt-open2">OPEN  AS64501, HoldTime=180</div>
+            <div class="packet keepalive" id="pkt-ka1">KEEPALIVE</div>
+            <div class="packet keepalive" id="pkt-ka2">KEEPALIVE</div>
+            <div class="packet update" id="pkt-update1">UPDATE  203.0.113.0/24  Path: 64500</div>
+            <div class="packet update" id="pkt-update2">UPDATE  192.0.2.0/24  Path: 64501</div>
+            <div class="packet update" id="pkt-update3">UPDATE  198.51.100.0/24  Path: 64500</div>
+            <div class="packet withdraw" id="pkt-withdraw">WITHDRAW  198.51.100.0/24</div>
+
+            <!-- Route tables -->
+            <div class="route-table left-rt" id="rt-left">
+                <div class="rt-title">BGP Table (AS 64500)</div>
+            </div>
+            <div class="route-table right-rt" id="rt-right">
+                <div class="rt-title">BGP Table (AS 64501)</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="seq-display">
+        <span id="left-info">AS 64500 — ISP Alpha</span>
+        <span id="right-info">AS 64501 — ISP Beta</span>
+    </div>
+
+    <div class="step-info" id="step-info">
+        <h3>Ready to start</h3>
+        <p>Click <strong>Next Step</strong> to walk through a BGP peering session. You'll see OPEN messages, KEEPALIVE confirmations, UPDATE messages advertising routes, best path selection, and a route withdrawal.</p>
+        <div class="detail">BGP (Border Gateway Protocol) is the routing protocol that holds the Internet together. It allows Autonomous Systems (AS) to exchange reachability information for IP prefixes.</div>
+    </div>
+
+    <div class="controls">
+        <button id="btn-reset" onclick="resetAnimation()">↺ Reset</button>
+        <button id="btn-next" class="primary" onclick="nextStep()">Next Step →</button>
+        <button id="btn-auto" onclick="autoPlay()">▶ Auto Play</button>
+    </div>
+
+    <!-- Try it yourself -->
+    <div class="try-it">
+        <h2>🧪 Try It Yourself</h2>
+        <p class="try-desc">Explore real BGP data using public Looking Glasses, route servers, and command-line tools.</p>
+
+        <div class="terminal-tabs">
+            <button class="tab active" onclick="switchTab('looking-glass')">Looking Glasses</button>
+            <button class="tab" onclick="switchTab('cli-tools')">CLI Tools</button>
+            <button class="tab" onclick="switchTab('resources')">Resources</button>
+        </div>
+
+        <div class="terminal-panel" id="panel-looking-glass">
+            <div class="term-step">
+                <span class="term-badge web-badge">Public Looking Glasses</span>
+                <div class="term-block">
+                    <div class="term-header">View real BGP routes from major networks</div>
+                    <pre><code><span class="comment"># These web tools let you query BGP tables from real routers:</span>
+
+<span class="prompt">→</span> Hurricane Electric BGP Toolkit
+  https://bgp.he.net/
+
+<span class="prompt">→</span> RIPE RIS Looking Glass
+  https://stat.ripe.net/
+
+<span class="prompt">→</span> RouteViews Project
+  http://www.routeviews.org/
+
+<span class="prompt">→</span> BGP.Tools
+  https://bgp.tools/</code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge observe-badge">Example: Look up an AS</span>
+                <div class="term-block">
+                    <div class="term-header">On bgp.he.net, search for any AS number to see:</div>
+                    <pre><code><span class="comment"># For AS13335 (Cloudflare):</span>
+Prefixes originated: 104.16.0.0/13, 1.1.1.0/24, ...
+Upstream peers:      AS174, AS1299, AS2914, ...
+Downstream:          AS209242, ...
+AS Path examples:    64500 174 13335</code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> Looking Glasses show you real-time BGP data — the actual routes that make the Internet work. Try searching for your own ISP's AS number.
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-cli-tools">
+            <div class="term-step">
+                <span class="term-badge tool-badge">bgpq4 — Prefix List Generator</span>
+                <div class="term-block">
+                    <div class="term-header">Generate prefix lists from IRR databases</div>
+                    <pre><code><span class="prompt">$</span> bgpq4 -4 -l PEERS_CLOUDFLARE AS13335
+ip prefix-list PEERS_CLOUDFLARE permit 1.0.0.0/24
+ip prefix-list PEERS_CLOUDFLARE permit 1.1.1.0/24
+ip prefix-list PEERS_CLOUDFLARE permit 104.16.0.0/13
+...</code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge tool-badge">whois — AS Info Lookup</span>
+                <div class="term-block">
+                    <div class="term-header">Query WHOIS for AS and prefix details</div>
+                    <pre><code><span class="prompt">$</span> whois -h whois.radb.net AS13335
+aut-num:     AS13335
+as-name:     CLOUDFLARENET
+descr:       Cloudflare, Inc.
+import:      from AS174 accept ANY
+export:      to AS174 announce AS-CLOUDFLARE
+
+<span class="prompt">$</span> whois -h whois.radb.net 1.1.1.0/24
+route:       1.1.1.0/24
+origin:      AS13335
+descr:       APNIC and Cloudflare DNS Resolver</code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge tool-badge">traceroute — See the AS Path</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> traceroute -A 1.1.1.1
+ 1  gateway (10.0.0.1) [AS64500]  1.2 ms
+ 2  pe-router (203.0.113.1) [AS64500]  3.4 ms
+ 3  transit (198.51.100.1) [AS174]  8.1 ms
+ 4  cloudflare (1.1.1.1) [AS13335]  5.2 ms
+
+<span class="comment"># The -A flag shows ASN for each hop</span></code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> Install <code>bgpq4</code> with your package manager (<code>apt install bgpq4</code>) and use <code>mtr -z</code> for a live traceroute with AS numbers.
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-resources">
+            <div class="term-step">
+                <span class="term-badge observe-badge">Learn More</span>
+                <div class="term-block">
+                    <div class="term-header">Essential BGP resources</div>
+                    <pre><code><span class="comment"># RFCs</span>
+<span class="prompt">→</span> RFC 4271 — BGP-4 specification
+<span class="prompt">→</span> RFC 7454 — BGP Operations and Security
+<span class="prompt">→</span> RFC 6811 — RPKI-based Route Origin Validation
+
+<span class="comment"># Practice Labs</span>
+<span class="prompt">→</span> GNS3 / EVE-NG — Build virtual BGP labs
+<span class="prompt">→</span> FRRouting (FRR) — Open-source BGP daemon
+<span class="prompt">→</span> BIRD — Lightweight routing daemon
+
+<span class="comment"># Monitoring</span>
+<span class="prompt">→</span> BGPStream (bgpstream.crosswork.cisco.com)
+<span class="prompt">→</span> RIPE RIS Live — Real-time BGP updates
+<span class="prompt">→</span> Cloudflare Radar — bgp.cloudflare.com</code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge web-badge">Lab Setup with FRRouting</span>
+                <div class="term-block">
+                    <pre><code><span class="comment"># Minimal FRR BGP config for AS 64500:</span>
+<span class="prompt">$</span> vtysh
+router bgp 64500
+  bgp router-id 10.0.0.1
+  neighbor 10.0.0.2 remote-as 64501
+  address-family ipv4 unicast
+    network 203.0.113.0/24
+    network 198.51.100.0/24
+  exit-address-family</code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> You can run two FRR instances in Docker containers to simulate a full eBGP peering session on your laptop.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const leftLine = 111;
+        function getRightLine() { return diagram.offsetWidth - 111; }
+        const diagram = document.getElementById('diagram');
+
+        const steps = [
+            {
+                title: "Initial State — IDLE",
+                desc: "Both BGP speakers are in <strong>IDLE</strong> state. Each router has been configured with its neighbor's IP address and AS number. A TCP connection on port 179 has not yet been initiated.",
+                detail: "AS 64500 (ISP Alpha)\n  Router ID: 10.0.0.1\n  Local prefixes: 203.0.113.0/24, 198.51.100.0/24\n\nAS 64501 (ISP Beta)\n  Router ID: 10.0.0.2\n  Local prefixes: 192.0.2.0/24\n\nBGP state: IDLE → waiting for Start event",
+                leftState: { text: "IDLE", cls: "idle" },
+                rightState: { text: "IDLE", cls: "idle" },
+                routeTableLeft: "",
+                routeTableRight: ""
+            },
+            {
+                title: "Step 1: TCP Connection + OPEN Messages",
+                desc: "A TCP session is established on port 179. Both peers immediately send <strong>OPEN</strong> messages containing their AS number, BGP version (4), hold time, and router ID. This is the BGP handshake.",
+                detail: "BGP OPEN Message (AS 64500 → AS 64501):\n  Version:    4\n  My AS:      64500\n  Hold Time:  180 seconds\n  Router ID:  10.0.0.1\n  Capabilities: MP-BGP IPv4, Route Refresh\n\nBGP OPEN Message (AS 64501 → AS 64500):\n  Version:    4\n  My AS:      64501\n  Hold Time:  180 seconds\n  Router ID:  10.0.0.2",
+                packets: [
+                    { id: "pkt-open1", dir: "right", y: 175 },
+                    { id: "pkt-open2", dir: "left", y: 215 }
+                ],
+                leftState: { text: "OPEN_SENT", cls: "open-sent" },
+                rightState: { text: "OPEN_SENT", cls: "open-sent" },
+                routeTableLeft: "",
+                routeTableRight: ""
+            },
+            {
+                title: "Step 2: KEEPALIVE — Session Confirmed",
+                desc: "Both peers validate the received OPEN and respond with <strong>KEEPALIVE</strong> messages. This confirms the session parameters are acceptable. The BGP session moves to <strong>ESTABLISHED</strong>.",
+                detail: "KEEPALIVE messages are 19 bytes (header only, no data).\nSent every Hold Time / 3 = 60 seconds to maintain the session.\n\nIf no KEEPALIVE or UPDATE is received within the\nhold time (180s), the session is torn down.\n\nState transition: OPEN_CONFIRM → ESTABLISHED",
+                packets: [
+                    { id: "pkt-ka1", dir: "right", y: 260 },
+                    { id: "pkt-ka2", dir: "left", y: 295 }
+                ],
+                leftState: { text: "ESTABLISHED", cls: "established" },
+                rightState: { text: "ESTABLISHED", cls: "established" },
+                routeTableLeft: "",
+                routeTableRight: ""
+            },
+            {
+                title: "Step 3: UPDATE — Advertising Routes",
+                desc: "AS 64500 sends an <strong>UPDATE</strong> advertising <strong>203.0.113.0/24</strong> with AS_PATH [64500]. AS 64501 sends its prefix <strong>192.0.2.0/24</strong> with AS_PATH [64501]. Each peer installs received routes in its BGP table.",
+                detail: "UPDATE from AS 64500:\n  NLRI:       203.0.113.0/24\n  AS_PATH:    64500\n  NEXT_HOP:   10.0.0.1\n  ORIGIN:     IGP\n  LOCAL_PREF: 100\n\nUPDATE from AS 64501:\n  NLRI:       192.0.2.0/24\n  AS_PATH:    64501\n  NEXT_HOP:   10.0.0.2\n  ORIGIN:     IGP",
+                packets: [
+                    { id: "pkt-update1", dir: "right", y: 340 },
+                    { id: "pkt-update2", dir: "left", y: 375 }
+                ],
+                leftState: { text: "ESTABLISHED", cls: "established" },
+                rightState: { text: "ESTABLISHED", cls: "established" },
+                routeTableLeft: '<div class="rt-row">* 192.0.2.0/24 → 64501</div>',
+                routeTableRight: '<div class="rt-row">* 203.0.113.0/24 → 64500</div>'
+            },
+            {
+                title: "Step 4: UPDATE — More Routes + Best Path",
+                desc: "AS 64500 advertises another prefix: <strong>198.51.100.0/24</strong>. AS 64501 now has two routes from AS 64500 and selects both as best paths (shortest AS_PATH, only one path per prefix).",
+                detail: "UPDATE from AS 64500:\n  NLRI:       198.51.100.0/24\n  AS_PATH:    64500\n  NEXT_HOP:   10.0.0.1\n\nBGP Best Path Selection (simplified):\n  1. Highest LOCAL_PREF         (100 = default)\n  2. Shortest AS_PATH           (length 1 ✓)\n  3. Lowest ORIGIN              (IGP ✓)\n  4. Lowest MED\n  5. eBGP over iBGP\n  6. Lowest Router ID           (tiebreaker)\n\nAS 64501 BGP table now has 2 routes from AS 64500.\nBoth selected as best (★) — only path available.",
+                packets: [
+                    { id: "pkt-update3", dir: "right", y: 415 }
+                ],
+                leftState: { text: "ESTABLISHED", cls: "established" },
+                rightState: { text: "ESTABLISHED", cls: "established" },
+                routeTableLeft: '<div class="rt-row">* 192.0.2.0/24 → 64501</div>',
+                routeTableRight: '<div class="rt-row best">★ 203.0.113.0/24 → 64500</div><div class="rt-row best">★ 198.51.100.0/24 → 64500</div>'
+            },
+            {
+                title: "Step 5: WITHDRAW — Route Removed",
+                desc: "AS 64500 loses connectivity to <strong>198.51.100.0/24</strong> and sends an UPDATE with a <strong>Withdrawn Routes</strong> field. AS 64501 removes this prefix from its BGP table and updates its routing.",
+                detail: "UPDATE (Withdrawal) from AS 64500:\n  Withdrawn Routes: 198.51.100.0/24\n  NLRI:             (empty)\n\nAS 64501 actions:\n  1. Remove 198.51.100.0/24 from BGP table\n  2. Remove from RIB (routing table)\n  3. Send withdrawal to any downstream peers\n  4. If alternate path existed, run best path selection\n\nThe prefix is no longer reachable via AS 64500.",
+                packets: [
+                    { id: "pkt-withdraw", dir: "right", y: 460 }
+                ],
+                leftState: { text: "ESTABLISHED", cls: "established" },
+                rightState: { text: "ESTABLISHED", cls: "established" },
+                routeTableLeft: '<div class="rt-row">* 192.0.2.0/24 → 64501</div>',
+                routeTableRight: '<div class="rt-row best">★ 203.0.113.0/24 → 64500</div><div class="rt-row withdrawn">✗ 198.51.100.0/24</div>'
+            }
+        ];
+
+        let currentStep = 0;
+        let isAnimating = false;
+
+        function animatePacket(pktId, direction, yPos) {
+            return new Promise(resolve => {
+                const pkt = document.getElementById(pktId);
+                const rightLine = getRightLine();
+                const startX = direction === 'right' ? leftLine + 10 : rightLine - pkt.offsetWidth - 10;
+                const endX = direction === 'right' ? rightLine - pkt.offsetWidth - 10 : leftLine + 10;
+
+                pkt.style.transition = 'none';
+                pkt.style.top = yPos + 'px';
+                pkt.style.left = startX + 'px';
+                pkt.style.opacity = '1';
+
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        pkt.style.transition = 'left 1s ease-in-out';
+                        pkt.style.left = endX + 'px';
+                    });
+                });
+
+                setTimeout(resolve, 1100);
+            });
+        }
+
+        function updateStates(step) {
+            const ls = document.getElementById('left-state');
+            const rs = document.getElementById('right-state');
+            ls.textContent = step.leftState.text;
+            ls.className = `state left-state visible ${step.leftState.cls}`;
+            rs.textContent = step.rightState.text;
+            rs.className = `state right-state visible ${step.rightState.cls}`;
+
+            const rtl = document.getElementById('rt-left');
+            const rtr = document.getElementById('rt-right');
+            if (step.routeTableLeft) {
+                rtl.innerHTML = '<div class="rt-title">BGP Table (AS 64500)</div>' + step.routeTableLeft;
+                rtl.classList.add('visible');
+            } else {
+                rtl.classList.remove('visible');
+            }
+            if (step.routeTableRight) {
+                rtr.innerHTML = '<div class="rt-title">BGP Table (AS 64501)</div>' + step.routeTableRight;
+                rtr.classList.add('visible');
+            } else {
+                rtr.classList.remove('visible');
+            }
+        }
+
+        function updateInfo(step) {
+            document.getElementById('step-info').innerHTML = `
+                <h3>${step.title}</h3>
+                <p>${step.desc}</p>
+                <div class="detail">${step.detail}</div>
+            `;
+        }
+
+        async function nextStep() {
+            if (isAnimating || currentStep >= steps.length) return;
+            isAnimating = true;
+            document.getElementById('btn-next').disabled = true;
+            document.getElementById('btn-auto').disabled = true;
+
+            const step = steps[currentStep];
+            updateInfo(step);
+            updateStates(step);
+
+            if (step.packets) {
+                for (const p of step.packets) {
+                    await animatePacket(p.id, p.dir, p.y);
+                }
+            }
+
+            currentStep++;
+            isAnimating = false;
+            document.getElementById('btn-next').disabled = currentStep >= steps.length;
+            document.getElementById('btn-auto').disabled = currentStep >= steps.length;
+        }
+
+        async function autoPlay() {
+            while (currentStep < steps.length) {
+                await nextStep();
+                if (currentStep < steps.length) await new Promise(r => setTimeout(r, 800));
+            }
+        }
+
+        function resetAnimation() {
+            currentStep = 0;
+            isAnimating = false;
+            document.querySelectorAll('.packet').forEach(el => {
+                el.style.transition = 'none';
+                el.style.opacity = '0';
+                el.style.pointerEvents = 'none';
+            });
+            document.getElementById('rt-left').classList.remove('visible');
+            document.getElementById('rt-right').classList.remove('visible');
+            updateStates(steps[0]);
+            updateInfo(steps[0]);
+            document.getElementById('btn-next').disabled = false;
+            document.getElementById('btn-auto').disabled = false;
+        }
+
+        function switchTab(name) {
+            document.querySelectorAll('.terminal-panel').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('panel-' + name).classList.remove('hidden');
+            event.target.classList.add('active');
+        }
+
+        updateStates(steps[0]);
+    </script>
+</body>
+</html>

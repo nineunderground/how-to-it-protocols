@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DHCP DORA Process — How-To IT Protocols</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0e17;
+            color: #e0e6ed;
+            min-height: 100vh;
+            padding: 30px 20px;
+        }
+        .back { color: #7b2ff7; text-decoration: none; font-size: 0.9rem; }
+        .back:hover { text-decoration: underline; }
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            margin: 20px 0 8px;
+            background: linear-gradient(135deg, #00d2ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .desc {
+            text-align: center;
+            color: #8892a4;
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+            max-width: 650px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .canvas-wrapper { max-width: 800px; margin: 0 auto; position: relative; }
+        .diagram {
+            position: relative;
+            height: 520px;
+            background: #101620;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .endpoint {
+            position: absolute;
+            top: 20px;
+            width: 160px;
+            text-align: center;
+        }
+        .endpoint.client { left: 40px; }
+        .endpoint.server { right: 40px; }
+        .endpoint .icon { font-size: 2.5rem; margin-bottom: 6px; }
+        .endpoint .label { font-weight: 600; font-size: 1rem; }
+        .endpoint .sublabel {
+            font-size: 0.72rem;
+            color: #8892a4;
+            margin-top: 2px;
+            font-family: 'Courier New', monospace;
+            transition: color 0.5s;
+        }
+        .endpoint .sublabel.highlight { color: #00e676; }
+
+        .timeline {
+            position: absolute;
+            top: 105px;
+            bottom: 30px;
+            width: 2px;
+            background: #1e2a3a;
+        }
+        .timeline.client-line { left: 120px; }
+        .timeline.server-line { right: 120px; }
+
+        .packet {
+            position: absolute;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.82rem;
+            font-weight: 600;
+            border-radius: 8px;
+            opacity: 0;
+            pointer-events: none;
+            white-space: nowrap;
+            padding: 0 14px;
+        }
+        .packet.discover {
+            background: rgba(0, 210, 255, 0.15);
+            border: 1px solid #00d2ff;
+            color: #00d2ff;
+        }
+        .packet.offer {
+            background: rgba(123, 47, 247, 0.15);
+            border: 1px solid #7b2ff7;
+            color: #a78bfa;
+        }
+        .packet.request {
+            background: rgba(251, 191, 36, 0.15);
+            border: 1px solid #fbbf24;
+            color: #fbbf24;
+        }
+        .packet.ack-pkt {
+            background: rgba(0, 230, 118, 0.15);
+            border: 1px solid #00e676;
+            color: #00e676;
+        }
+
+        /* Broadcast badge */
+        .broadcast-tag {
+            position: absolute;
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(251,191,36,0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(251,191,36,0.3);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s;
+        }
+        .broadcast-tag.visible { opacity: 1; }
+
+        .state {
+            position: absolute;
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+        .state.visible { opacity: 1; }
+        .state.client-state { left: 40px; }
+        .state.server-state { right: 40px; }
+        .state.no-ip { background: #2d1f1f; color: #f87171; }
+        .state.waiting { background: #2d2a1f; color: #fbbf24; }
+        .state.configured { background: #1f2d1f; color: #00e676; }
+        .state.ready { background: #1f2d1f; color: #4ade80; }
+        .state.offering { background: #251f35; color: #a78bfa; }
+
+        .step-info {
+            max-width: 800px;
+            margin: 20px auto 0;
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 24px;
+            min-height: 120px;
+        }
+        .step-info h3 { font-size: 1.1rem; margin-bottom: 8px; }
+        .step-info p { color: #8892a4; line-height: 1.6; font-size: 0.92rem; }
+        .step-info .detail {
+            margin-top: 12px;
+            padding: 12px;
+            background: #0a0e17;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: #a0aec0;
+            white-space: pre-wrap;
+        }
+
+        .controls {
+            max-width: 800px;
+            margin: 20px auto 0;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        button {
+            padding: 10px 28px;
+            border: 1px solid #1e2a3a;
+            border-radius: 8px;
+            background: #141a26;
+            color: #e0e6ed;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover { border-color: #7b2ff7; background: #1a2236; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        button.primary { background: #7b2ff7; border-color: #7b2ff7; color: #fff; }
+        button.primary:hover { background: #6b21e8; }
+
+        .config-display {
+            max-width: 800px;
+            margin: 12px auto 0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: #4a5568;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Config card */
+        .config-card {
+            max-width: 800px;
+            margin: 16px auto 0;
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 16px 24px;
+            display: none;
+        }
+        .config-card.visible { display: block; }
+        .config-card h4 {
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            color: #00e676;
+        }
+        .config-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 24px;
+        }
+        .config-item {
+            font-size: 0.82rem;
+            font-family: 'Courier New', monospace;
+        }
+        .config-item .cfg-label { color: #8892a4; }
+        .config-item .cfg-value { color: #e0e6ed; font-weight: 600; }
+
+        /* Try it yourself */
+        .try-it { max-width: 800px; margin: 40px auto 0; }
+        .try-it h2 { font-size: 1.5rem; margin-bottom: 8px; }
+        .try-desc { color: #8892a4; margin-bottom: 20px; font-size: 0.92rem; }
+        .terminal-tabs { display: flex; gap: 4px; margin-bottom: 0; }
+        .tab {
+            padding: 8px 20px;
+            border: 1px solid #1e2a3a;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: #101620;
+            color: #8892a4;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .tab.active { background: #141a26; color: #e0e6ed; border-color: #1e2a3a; }
+        .terminal-panel {
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 0 12px 12px 12px;
+            padding: 24px;
+        }
+        .terminal-panel.hidden { display: none; }
+        .term-step { margin-bottom: 20px; }
+        .term-step:last-child { margin-bottom: 0; }
+        .term-badge {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .server-badge { background: #1f2d1f; color: #4ade80; }
+        .client-badge { background: #1f2535; color: #00d2ff; }
+        .observe-badge { background: #2d2a1f; color: #fbbf24; }
+        .term-block {
+            background: #0a0e17;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+        }
+        .term-header { font-size: 0.82rem; color: #8892a4; margin-bottom: 8px; }
+        .term-block pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #e0e6ed;
+        }
+        .term-block .prompt { color: #4ade80; }
+        .term-block .comment { color: #4a5568; }
+        .term-output {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #1e2a3a;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: #8892a4;
+        }
+        .term-note {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: rgba(123, 47, 247, 0.08);
+            border-left: 3px solid #7b2ff7;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.85rem;
+            color: #a0aec0;
+        }
+        .term-note code {
+            background: #0a0e17;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.82rem;
+        }
+    </style>
+</head>
+<body>
+    <a href="../" class="back">← Back to protocols</a>
+    <h1>📡 DHCP — Dynamic Host Configuration Protocol</h1>
+    <p class="desc">How a client automatically obtains an IP address from a DHCP server using the DORA sequence: Discover → Offer → Request → Acknowledge.</p>
+
+    <div class="canvas-wrapper">
+        <div class="diagram" id="diagram">
+            <div class="endpoint client">
+                <div class="icon">💻</div>
+                <div class="label">Client</div>
+                <div class="sublabel" id="client-ip">IP: 0.0.0.0</div>
+            </div>
+            <div class="endpoint server">
+                <div class="icon">🖧</div>
+                <div class="label">DHCP Server</div>
+                <div class="sublabel">IP: 192.168.1.1</div>
+            </div>
+
+            <div class="timeline client-line"></div>
+            <div class="timeline server-line"></div>
+
+            <div class="state no-ip client-state visible" id="client-state" style="top: 110px;">NO IP</div>
+            <div class="state ready server-state visible" id="server-state" style="top: 110px;">READY</div>
+
+            <div class="broadcast-tag" id="bcast-1" style="top: 165px;">BROADCAST 255.255.255.255</div>
+            <div class="broadcast-tag" id="bcast-2" style="top: 365px;">BROADCAST 255.255.255.255</div>
+
+            <div class="packet discover" id="pkt-discover">DHCP Discover</div>
+            <div class="packet offer" id="pkt-offer">DHCP Offer — 192.168.1.100</div>
+            <div class="packet request" id="pkt-request">DHCP Request — 192.168.1.100</div>
+            <div class="packet ack-pkt" id="pkt-ack">DHCP ACK — Lease confirmed</div>
+        </div>
+    </div>
+
+    <div class="config-display">
+        <span id="client-mac">Client MAC: AA:BB:CC:DD:EE:01</span>
+        <span id="lease-info">Lease: —</span>
+    </div>
+
+    <div class="config-card" id="config-card">
+        <h4>✅ Client Network Configuration</h4>
+        <div class="config-grid">
+            <div class="config-item"><span class="cfg-label">IP Address:</span> <span class="cfg-value">192.168.1.100</span></div>
+            <div class="config-item"><span class="cfg-label">Subnet Mask:</span> <span class="cfg-value">255.255.255.0</span></div>
+            <div class="config-item"><span class="cfg-label">Gateway:</span> <span class="cfg-value">192.168.1.1</span></div>
+            <div class="config-item"><span class="cfg-label">DNS Server:</span> <span class="cfg-value">8.8.8.8</span></div>
+            <div class="config-item"><span class="cfg-label">Lease Time:</span> <span class="cfg-value">86400s (24h)</span></div>
+            <div class="config-item"><span class="cfg-label">Domain:</span> <span class="cfg-value">local.lan</span></div>
+        </div>
+    </div>
+
+    <div class="step-info" id="step-info">
+        <h3>Ready to start</h3>
+        <p>Click <strong>Next Step</strong> to walk through the DHCP DORA process. The client starts with no IP address and will be fully configured by the end.</p>
+        <div class="detail">DHCP uses UDP ports 67 (server) and 68 (client).
+The client broadcasts because it doesn't yet have an IP address.
+The entire process typically completes in milliseconds.</div>
+    </div>
+
+    <div class="controls">
+        <button id="btn-reset" onclick="resetAnimation()">↺ Reset</button>
+        <button id="btn-next" class="primary" onclick="nextStep()">Next Step →</button>
+        <button id="btn-auto" onclick="autoPlay()">▶ Auto Play</button>
+    </div>
+
+    <!-- Try it yourself -->
+    <div class="try-it">
+        <h2>🧪 Try It Yourself</h2>
+        <p class="try-desc">Inspect DHCP in action on your own machine. These commands let you observe or trigger the DORA sequence.</p>
+
+        <div class="terminal-tabs">
+            <button class="tab active" onclick="switchTab('linux')">Linux</button>
+            <button class="tab" onclick="switchTab('macos')">macOS</button>
+            <button class="tab" onclick="switchTab('tcpdump')">tcpdump</button>
+        </div>
+
+        <div class="terminal-panel" id="panel-linux">
+            <div class="term-step">
+                <span class="term-badge client-badge">Release current lease</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> sudo dhclient -r eth0
+<span class="comment"># Sends DHCPRELEASE, gives up the current IP</span></code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge client-badge">Request a new lease (DORA)</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> sudo dhclient -v eth0</code></pre>
+                    <div class="term-output">DHCPDISCOVER on eth0 to 255.255.255.255 port 67
+DHCPOFFER of 192.168.1.100 from 192.168.1.1
+DHCPREQUEST of 192.168.1.100 on eth0
+DHCPACK of 192.168.1.100 from 192.168.1.1
+bound to 192.168.1.100 -- renewal in 43200 seconds.</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge observe-badge">Check your configuration</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> ip addr show eth0
+<span class="prompt">$</span> ip route show
+<span class="prompt">$</span> cat /etc/resolv.conf</code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> On newer systems, use <code>sudo dhcpcd -n eth0</code> or <code>nmcli con down/up "Connection"</code> instead of dhclient.
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-macos">
+            <div class="term-step">
+                <span class="term-badge client-badge">Renew DHCP lease</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> sudo ipconfig set en0 DHCP
+<span class="comment"># Or from System Settings → Network → Advanced → TCP/IP → Renew DHCP Lease</span></code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge observe-badge">View DHCP lease details</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> ipconfig getpacket en0</code></pre>
+                    <div class="term-output">op = BOOTREPLY
+htype = 1
+yiaddr = 192.168.1.100
+server_identifier (ip): 192.168.1.1
+lease_time (uint32): 86400
+subnet_mask (ip): 255.255.255.0
+router (ip_mult): 192.168.1.1
+domain_name_server (ip_mult): 8.8.8.8</div>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Note:</strong> <code>ipconfig getpacket en0</code> shows the actual DHCP ACK packet your Mac received — very useful for debugging.
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-tcpdump">
+            <div class="term-step">
+                <span class="term-badge observe-badge">Capture DHCP packets</span>
+                <div class="term-block">
+                    <div class="term-header">Watch DHCP traffic on your network interface</div>
+                    <pre><code><span class="prompt">#</span> sudo tcpdump -i eth0 -n port 67 or port 68 -e</code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge client-badge">Trigger a renewal in another terminal, then observe:</span>
+                <div class="term-block">
+                    <pre><code>18:22:01 IP 0.0.0.0.68 > 255.255.255.255.67: BOOTP/DHCP, Request, xid 0x3a2b1c0d
+  DHCP-Message: Discover
+18:22:01 IP 192.168.1.1.67 > 255.255.255.255.68: BOOTP/DHCP, Reply, xid 0x3a2b1c0d
+  DHCP-Message: Offer, yiaddr 192.168.1.100
+18:22:01 IP 0.0.0.0.68 > 255.255.255.255.67: BOOTP/DHCP, Request, xid 0x3a2b1c0d
+  DHCP-Message: Request, requested-ip 192.168.1.100
+18:22:01 IP 192.168.1.1.67 > 255.255.255.255.68: BOOTP/DHCP, Reply, xid 0x3a2b1c0d
+  DHCP-Message: ACK, yiaddr 192.168.1.100, lease 86400s</code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge observe-badge">Understanding the fields</span>
+                <div class="term-block">
+                    <pre><code><span class="comment"># Key DHCP packet fields:</span>
+xid       = Transaction ID (links DORA together)
+yiaddr    = "Your" IP address (offered/assigned)
+siaddr    = Server IP address
+chaddr    = Client hardware (MAC) address
+options   = Subnet, gateway, DNS, lease time, etc.</code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> Use <code>-v</code> or <code>-vv</code> flags to see all DHCP options. Use <code>-w dhcp.pcap</code> to save and open in Wireshark for detailed analysis.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const steps = [
+            {
+                id: 0,
+                title: "Initial State",
+                desc: "The client has just connected to the network but has <strong>no IP address</strong> (0.0.0.0). The DHCP server is listening on UDP port 67, ready to assign addresses from its pool.",
+                detail: "Client: No IP (0.0.0.0), MAC: AA:BB:CC:DD:EE:01\nServer: 192.168.1.1, Pool: 192.168.1.100–200\n\nThe client knows nothing about the network.\nIt must broadcast to find a DHCP server.",
+                clientState: { text: "NO IP", cls: "no-ip" },
+                serverState: { text: "READY", cls: "ready" },
+                clientIp: "IP: 0.0.0.0",
+                leaseInfo: "Lease: —",
+                showConfig: false
+            },
+            {
+                id: 1,
+                title: "Step 1: DHCP Discover (D)",
+                desc: "The client <strong>broadcasts</strong> a DHCPDISCOVER message to 255.255.255.255. Since it has no IP, the source is 0.0.0.0. It's essentially saying: <em>\"Is there a DHCP server out there? I need an IP!\"</em>",
+                detail: "UDP Packet:\n  Src:  0.0.0.0:68 (client port)\n  Dst:  255.255.255.255:67 (server port)\n  Op:   BOOTREQUEST\n  Type: DHCPDISCOVER\n  XID:  0x3a2b1c0d (transaction ID)\n  MAC:  AA:BB:CC:DD:EE:01\n\nBroadcast — every device on the LAN receives this.",
+                packet: "discover",
+                direction: "right",
+                yPos: 160,
+                broadcast: "bcast-1",
+                clientState: { text: "SELECTING", cls: "waiting" },
+                serverState: { text: "READY", cls: "ready" },
+                clientIp: "IP: 0.0.0.0",
+                leaseInfo: "Lease: —",
+                showConfig: false
+            },
+            {
+                id: 2,
+                title: "Step 2: DHCP Offer (O)",
+                desc: "The server responds with a <strong>DHCPOFFER</strong>, proposing IP <strong>192.168.1.100</strong> along with subnet mask, gateway, DNS, and lease duration. If multiple servers exist, the client may receive multiple offers.",
+                detail: "UDP Packet:\n  Src:  192.168.1.1:67\n  Dst:  255.255.255.255:68\n  Op:   BOOTREPLY\n  Type: DHCPOFFER\n  XID:  0x3a2b1c0d\n\nOffered config:\n  yiaddr (your IP): 192.168.1.100\n  Subnet Mask:      255.255.255.0\n  Router/Gateway:   192.168.1.1\n  DNS Server:       8.8.8.8\n  Lease Time:       86400 seconds (24 hours)",
+                packet: "offer",
+                direction: "left",
+                yPos: 260,
+                clientState: { text: "SELECTING", cls: "waiting" },
+                serverState: { text: "OFFERING", cls: "offering" },
+                clientIp: "IP: 0.0.0.0",
+                leaseInfo: "Lease: —",
+                showConfig: false
+            },
+            {
+                id: 3,
+                title: "Step 3: DHCP Request (R)",
+                desc: "The client <strong>broadcasts</strong> a DHCPREQUEST, accepting the offer from 192.168.1.1. It broadcasts (rather than unicast) so that any other DHCP servers know their offers were declined.",
+                detail: "UDP Packet:\n  Src:  0.0.0.0:68\n  Dst:  255.255.255.255:67\n  Op:   BOOTREQUEST\n  Type: DHCPREQUEST\n  XID:  0x3a2b1c0d\n\n  Requested IP:     192.168.1.100\n  Server ID:        192.168.1.1\n\nStill broadcast! The client doesn't own the IP yet.",
+                packet: "request",
+                direction: "right",
+                yPos: 360,
+                broadcast: "bcast-2",
+                clientState: { text: "REQUESTING", cls: "waiting" },
+                serverState: { text: "OFFERING", cls: "offering" },
+                clientIp: "IP: 0.0.0.0",
+                leaseInfo: "Lease: —",
+                showConfig: false
+            },
+            {
+                id: 4,
+                title: "Step 4: DHCP Acknowledge (A)",
+                desc: "The server sends a <strong>DHCPACK</strong>, confirming the lease. The client now configures its network interface with the assigned IP, subnet, gateway, and DNS. <strong>The client is online!</strong> 🎉",
+                detail: "UDP Packet:\n  Src:  192.168.1.1:67\n  Dst:  255.255.255.255:68\n  Op:   BOOTREPLY\n  Type: DHCPACK\n  XID:  0x3a2b1c0d\n\nConfirmed config:\n  IP Address:   192.168.1.100\n  Subnet Mask:  255.255.255.0\n  Gateway:      192.168.1.1\n  DNS:          8.8.8.8\n  Lease:        86400s (renew at 50% = 43200s)\n\n✅ Client is now fully configured!",
+                packet: "ack",
+                direction: "left",
+                yPos: 440,
+                clientState: { text: "CONFIGURED", cls: "configured" },
+                serverState: { text: "LEASED", cls: "ready" },
+                clientIp: "IP: 192.168.1.100",
+                clientIpHighlight: true,
+                leaseInfo: "Lease: 86400s (24h)",
+                showConfig: true
+            }
+        ];
+
+        let currentStep = 0;
+        let isAnimating = false;
+
+        const diagram = document.getElementById('diagram');
+
+        function getClientLineX() { return 121; }
+        function getServerLineX() { return diagram.offsetWidth - 121; }
+
+        function animatePacket(packetId, direction, yPos) {
+            return new Promise(resolve => {
+                const pkt = document.getElementById(packetId);
+                const cX = getClientLineX();
+                const sX = getServerLineX();
+                const startX = direction === 'right' ? cX + 10 : sX - pkt.offsetWidth - 10;
+                const endX = direction === 'right' ? sX - pkt.offsetWidth - 10 : cX + 10;
+
+                pkt.style.top = yPos + 'px';
+                pkt.style.left = startX + 'px';
+                pkt.style.opacity = '1';
+                pkt.style.transition = 'left 1.2s ease-in-out';
+                pkt.style.pointerEvents = 'auto';
+
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        pkt.style.left = endX + 'px';
+                    });
+                });
+                setTimeout(resolve, 1300);
+            });
+        }
+
+        function updateStates(step) {
+            const cs = document.getElementById('client-state');
+            const ss = document.getElementById('server-state');
+            cs.textContent = step.clientState.text;
+            cs.className = `state client-state visible ${step.clientState.cls}`;
+            ss.textContent = step.serverState.text;
+            ss.className = `state server-state visible ${step.serverState.cls}`;
+
+            document.getElementById('client-ip').textContent = step.clientIp;
+            document.getElementById('client-ip').className = 'sublabel' + (step.clientIpHighlight ? ' highlight' : '');
+            document.getElementById('lease-info').textContent = step.leaseInfo;
+
+            const card = document.getElementById('config-card');
+            card.className = step.showConfig ? 'config-card visible' : 'config-card';
+        }
+
+        function updateInfo(step) {
+            document.getElementById('step-info').innerHTML = `
+                <h3>${step.title}</h3>
+                <p>${step.desc}</p>
+                <div class="detail">${step.detail}</div>
+            `;
+        }
+
+        function showBroadcast(id) {
+            if (!id) return;
+            const el = document.getElementById(id);
+            el.classList.add('visible');
+        }
+
+        async function nextStep() {
+            if (isAnimating || currentStep >= steps.length) return;
+            isAnimating = true;
+            document.getElementById('btn-next').disabled = true;
+            document.getElementById('btn-auto').disabled = true;
+
+            const step = steps[currentStep];
+            updateInfo(step);
+            updateStates(step);
+
+            if (step.broadcast) showBroadcast(step.broadcast);
+
+            if (step.packet) {
+                const pktId = {discover:'pkt-discover',offer:'pkt-offer',request:'pkt-request',ack:'pkt-ack'}[step.packet];
+                await animatePacket(pktId, step.direction, step.yPos);
+            }
+
+            currentStep++;
+            isAnimating = false;
+            document.getElementById('btn-next').disabled = currentStep >= steps.length;
+            document.getElementById('btn-auto').disabled = currentStep >= steps.length;
+        }
+
+        async function autoPlay() {
+            while (currentStep < steps.length) {
+                await nextStep();
+                if (currentStep < steps.length) await new Promise(r => setTimeout(r, 800));
+            }
+        }
+
+        function resetAnimation() {
+            currentStep = 0;
+            isAnimating = false;
+            ['pkt-discover','pkt-offer','pkt-request','pkt-ack'].forEach(id => {
+                const el = document.getElementById(id);
+                el.style.transition = 'none';
+                el.style.opacity = '0';
+                el.style.pointerEvents = 'none';
+            });
+            ['bcast-1','bcast-2'].forEach(id => {
+                document.getElementById(id).classList.remove('visible');
+            });
+            updateStates(steps[0]);
+            updateInfo(steps[0]);
+            document.getElementById('btn-next').disabled = false;
+            document.getElementById('btn-auto').disabled = false;
+        }
+
+        function switchTab(name) {
+            document.querySelectorAll('.terminal-panel').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('panel-' + name).classList.remove('hidden');
+            event.target.classList.add('active');
+        }
+
+        updateStates(steps[0]);
+    </script>
+</body>
+</html>

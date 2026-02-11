@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICMP / Ping — How-To IT Protocols</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0e17;
+            color: #e0e6ed;
+            min-height: 100vh;
+            padding: 30px 20px;
+        }
+        .back { color: #7b2ff7; text-decoration: none; font-size: 0.9rem; }
+        .back:hover { text-decoration: underline; }
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            margin: 20px 0 8px;
+            background: linear-gradient(135deg, #00d2ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .desc {
+            text-align: center;
+            color: #8892a4;
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+            max-width: 650px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .canvas-wrapper { max-width: 860px; margin: 0 auto; position: relative; }
+        .diagram {
+            position: relative;
+            height: 400px;
+            background: #101620;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        /* Nodes (source, routers, destination) */
+        .node {
+            position: absolute;
+            text-align: center;
+            width: 90px;
+        }
+        .node .icon { font-size: 2rem; margin-bottom: 4px; }
+        .node .label { font-weight: 600; font-size: 0.85rem; }
+        .node .sublabel { font-size: 0.7rem; color: #8892a4; margin-top: 2px; }
+
+        /* Connection lines between nodes */
+        .link-svg {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .link-line { stroke: #1e2a3a; stroke-width: 2; }
+
+        /* Animated packet */
+        .packet {
+            position: absolute;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.78rem;
+            font-weight: 600;
+            border-radius: 8px;
+            opacity: 0;
+            pointer-events: none;
+            white-space: nowrap;
+            padding: 0 12px;
+            transition: none;
+            z-index: 10;
+        }
+        .packet.request {
+            background: rgba(0, 210, 255, 0.15);
+            border: 1px solid #00d2ff;
+            color: #00d2ff;
+        }
+        .packet.reply {
+            background: rgba(0, 230, 118, 0.15);
+            border: 1px solid #00e676;
+            color: #00e676;
+        }
+        .packet.ttl-expire {
+            background: rgba(248, 113, 113, 0.15);
+            border: 1px solid #f87171;
+            color: #f87171;
+        }
+
+        /* TTL badge on nodes */
+        .ttl-badge {
+            position: absolute;
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            opacity: 0;
+            background: #1f2535;
+            color: #00d2ff;
+            white-space: nowrap;
+            z-index: 5;
+        }
+        .ttl-badge.visible { opacity: 1; }
+        .ttl-badge.expired { background: #2d1f1f; color: #f87171; }
+
+        /* RTT display */
+        .rtt-display {
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1rem;
+            font-weight: 700;
+            color: #00e676;
+            opacity: 0;
+            font-family: 'Courier New', monospace;
+        }
+        .rtt-display.visible { opacity: 1; transition: opacity 0.4s; }
+
+        /* Phase indicator */
+        .phase-label {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8rem;
+            padding: 4px 16px;
+            border-radius: 12px;
+            font-weight: 600;
+            background: rgba(123, 47, 247, 0.15);
+            color: #a78bfa;
+            z-index: 20;
+        }
+
+        /* Step info */
+        .step-info {
+            max-width: 860px;
+            margin: 20px auto 0;
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 24px;
+            min-height: 110px;
+        }
+        .step-info h3 { font-size: 1.1rem; margin-bottom: 8px; }
+        .step-info p { color: #8892a4; line-height: 1.6; font-size: 0.92rem; }
+        .step-info .detail {
+            margin-top: 12px;
+            padding: 12px;
+            background: #0a0e17;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: #a0aec0;
+            white-space: pre-wrap;
+        }
+
+        /* Controls */
+        .controls {
+            max-width: 860px;
+            margin: 20px auto 0;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        button {
+            padding: 10px 28px;
+            border: 1px solid #1e2a3a;
+            border-radius: 8px;
+            background: #141a26;
+            color: #e0e6ed;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover { border-color: #7b2ff7; background: #1a2236; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        button.primary { background: #7b2ff7; border-color: #7b2ff7; color: #fff; }
+        button.primary:hover { background: #6b21e8; }
+
+        /* Try it yourself */
+        .try-it { max-width: 860px; margin: 40px auto 0; }
+        .try-it h2 { font-size: 1.5rem; margin-bottom: 8px; }
+        .try-desc { color: #8892a4; margin-bottom: 20px; font-size: 0.92rem; }
+        .terminal-tabs { display: flex; gap: 4px; margin-bottom: 0; }
+        .tab {
+            padding: 8px 20px;
+            border: 1px solid #1e2a3a;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: #101620;
+            color: #8892a4;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .tab.active { background: #141a26; color: #e0e6ed; border-color: #1e2a3a; }
+        .terminal-panel {
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 0 12px 12px 12px;
+            padding: 24px;
+        }
+        .terminal-panel.hidden { display: none; }
+        .term-step { margin-bottom: 20px; }
+        .term-step:last-child { margin-bottom: 0; }
+        .term-badge {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .cmd-badge { background: #1f2535; color: #00d2ff; }
+        .observe-badge { background: #2d2a1f; color: #fbbf24; }
+        .term-block {
+            background: #0a0e17;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+        }
+        .term-header { font-size: 0.82rem; color: #8892a4; margin-bottom: 8px; }
+        .term-block pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #e0e6ed;
+        }
+        .term-block .prompt { color: #4ade80; }
+        .term-block .comment { color: #4a5568; }
+        .term-output {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #1e2a3a;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: #8892a4;
+            white-space: pre-wrap;
+        }
+        .term-note {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: rgba(123, 47, 247, 0.08);
+            border-left: 3px solid #7b2ff7;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.85rem;
+            color: #a0aec0;
+        }
+        .term-note code {
+            background: #0a0e17;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.82rem;
+        }
+    </style>
+</head>
+<body>
+    <a href="../" class="back">← Back to protocols</a>
+    <h1>📡 ICMP / Ping</h1>
+    <p class="desc">How ICMP Echo Request &amp; Reply work — packet hops, TTL decrement, round-trip time, and how traceroute uses TTL expiry to map the path.</p>
+
+    <div class="canvas-wrapper">
+        <div class="diagram" id="diagram">
+            <div class="phase-label" id="phase-label">Ping — Echo Request / Reply</div>
+
+            <!-- Nodes -->
+            <div class="node" id="node-src" style="left:30px; top:160px;">
+                <div class="icon">💻</div>
+                <div class="label">Source</div>
+                <div class="sublabel">192.168.1.10</div>
+            </div>
+            <div class="node" id="node-r1" style="left:220px; top:160px;">
+                <div class="icon">🔀</div>
+                <div class="label">Router 1</div>
+                <div class="sublabel">10.0.0.1</div>
+            </div>
+            <div class="node" id="node-r2" style="left:410px; top:160px;">
+                <div class="icon">🔀</div>
+                <div class="label">Router 2</div>
+                <div class="sublabel">10.1.0.1</div>
+            </div>
+            <div class="node" id="node-r3" style="left:600px; top:160px;">
+                <div class="icon">🔀</div>
+                <div class="label">Router 3</div>
+                <div class="sublabel">10.2.0.1</div>
+            </div>
+            <div class="node" id="node-dst" style="left:750px; top:160px;">
+                <div class="icon">🖥️</div>
+                <div class="label">Destination</div>
+                <div class="sublabel">93.184.216.34</div>
+            </div>
+
+            <!-- Links -->
+            <svg class="link-svg" id="link-svg"></svg>
+
+            <!-- Packet (reused) -->
+            <div class="packet request" id="pkt">Echo Request</div>
+
+            <!-- TTL badges -->
+            <div class="ttl-badge" id="ttl-src" style="left:42px; top:145px;"></div>
+            <div class="ttl-badge" id="ttl-r1" style="left:230px; top:145px;"></div>
+            <div class="ttl-badge" id="ttl-r2" style="left:420px; top:145px;"></div>
+            <div class="ttl-badge" id="ttl-r3" style="left:610px; top:145px;"></div>
+            <div class="ttl-badge" id="ttl-dst" style="left:755px; top:145px;"></div>
+
+            <!-- RTT -->
+            <div class="rtt-display" id="rtt-display">RTT: 24.3 ms</div>
+        </div>
+    </div>
+
+    <div class="step-info" id="step-info">
+        <h3>Ready to start</h3>
+        <p>Click <strong>Next Step</strong> to walk through an ICMP ping and then a traceroute. You'll see Echo Requests travel hop by hop with TTL decrementing, the Echo Reply returning, and how traceroute discovers each hop.</p>
+        <div class="detail">ICMP (Internet Control Message Protocol) is used by network tools like ping and traceroute to test connectivity and measure latency.</div>
+    </div>
+
+    <div class="controls">
+        <button id="btn-reset" onclick="resetAnimation()">↺ Reset</button>
+        <button id="btn-next" class="primary" onclick="nextStep()">Next Step →</button>
+        <button id="btn-auto" onclick="autoPlay()">▶ Auto Play</button>
+    </div>
+
+    <!-- Try it yourself -->
+    <div class="try-it">
+        <h2>🧪 Try It Yourself</h2>
+        <p class="try-desc">Use these common commands to see ICMP in action on your own machine.</p>
+
+        <div class="terminal-tabs">
+            <button class="tab active" onclick="switchTab('ping')">ping</button>
+            <button class="tab" onclick="switchTab('traceroute')">traceroute</button>
+            <button class="tab" onclick="switchTab('tcpdump')">tcpdump</button>
+        </div>
+
+        <div class="terminal-panel" id="panel-ping">
+            <div class="term-step">
+                <span class="term-badge cmd-badge">Basic Ping</span>
+                <div class="term-block">
+                    <div class="term-header">Send 4 ICMP Echo Requests</div>
+                    <pre><code><span class="prompt">$</span> ping -c 4 example.com</code></pre>
+                    <div class="term-output">PING example.com (93.184.216.34): 56 data bytes
+64 bytes from 93.184.216.34: icmp_seq=0 ttl=52 time=24.3 ms
+64 bytes from 93.184.216.34: icmp_seq=1 ttl=52 time=23.8 ms
+64 bytes from 93.184.216.34: icmp_seq=2 ttl=52 time=24.1 ms
+64 bytes from 93.184.216.34: icmp_seq=3 ttl=52 time=23.9 ms
+
+--- example.com ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss
+round-trip min/avg/max/stddev = 23.8/24.0/24.3/0.2 ms</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge observe-badge">Reading the output</span>
+                <div class="term-block">
+                    <pre><code><span class="comment"># 64 bytes    → reply payload size</span>
+<span class="comment"># icmp_seq=0  → sequence number (matches request to reply)</span>
+<span class="comment"># ttl=52      → remaining TTL when reply arrived</span>
+<span class="comment">#               (started at 64, decremented by 12 hops)</span>
+<span class="comment"># time=24.3ms → round-trip time for this packet</span></code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> Use <code>ping -s 1400 example.com</code> to test with larger packets (useful for MTU troubleshooting).
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-traceroute">
+            <div class="term-step">
+                <span class="term-badge cmd-badge">Traceroute</span>
+                <div class="term-block">
+                    <div class="term-header">Discover each hop to the destination</div>
+                    <pre><code><span class="prompt">$</span> traceroute example.com</code></pre>
+                    <div class="term-output">traceroute to example.com (93.184.216.34), 30 hops max
+ 1  gateway (192.168.1.1)      1.2 ms   1.0 ms   1.1 ms
+ 2  10.0.0.1                   5.4 ms   5.2 ms   5.3 ms
+ 3  10.1.0.1                  12.1 ms  11.9 ms  12.0 ms
+ 4  10.2.0.1                  18.7 ms  18.5 ms  18.6 ms
+ 5  93.184.216.34              24.3 ms  24.1 ms  24.2 ms</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge observe-badge">How it works</span>
+                <div class="term-block">
+                    <pre><code><span class="comment"># traceroute sends packets with increasing TTL:</span>
+<span class="comment"># TTL=1 → Router 1 decrements to 0, sends "Time Exceeded"</span>
+<span class="comment"># TTL=2 → Router 2 decrements to 0, sends "Time Exceeded"</span>
+<span class="comment"># TTL=3 → Router 3 decrements to 0, sends "Time Exceeded"</span>
+<span class="comment"># ...until TTL is large enough to reach the destination</span>
+<span class="comment"># Destination replies with Echo Reply → traceroute complete</span></code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> Use <code>traceroute -I example.com</code> to use ICMP instead of UDP (some firewalls block UDP). On Windows, use <code>tracert</code>.
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-tcpdump">
+            <div class="term-step">
+                <span class="term-badge cmd-badge">Capture ICMP packets</span>
+                <div class="term-block">
+                    <div class="term-header">Watch ICMP traffic in real time</div>
+                    <pre><code><span class="prompt">#</span> sudo tcpdump -nn -i any icmp</code></pre>
+                    <div class="term-output">10:22:01 IP 192.168.1.10 > 93.184.216.34: ICMP echo request, id 1234, seq 0, length 64
+10:22:01 IP 93.184.216.34 > 192.168.1.10: ICMP echo reply, id 1234, seq 0, length 64
+10:22:02 IP 192.168.1.10 > 93.184.216.34: ICMP echo request, id 1234, seq 1, length 64
+10:22:02 IP 93.184.216.34 > 192.168.1.10: ICMP echo reply, id 1234, seq 1, length 64</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge observe-badge">ICMP message types</span>
+                <div class="term-block">
+                    <pre><code><span class="comment"># Type 8  → Echo Request (ping)</span>
+<span class="comment"># Type 0  → Echo Reply (pong)</span>
+<span class="comment"># Type 11 → Time Exceeded (TTL expired, used by traceroute)</span>
+<span class="comment"># Type 3  → Destination Unreachable</span>
+<span class="comment"># Type 5  → Redirect</span></code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> Add <code>-v</code> to see TTL values: <code>sudo tcpdump -nn -v -i any icmp</code>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Node center positions (relative to diagram)
+        const nodes = [
+            { id: 'src', x: 75, y: 190 },
+            { id: 'r1',  x: 265, y: 190 },
+            { id: 'r2',  x: 455, y: 190 },
+            { id: 'r3',  x: 645, y: 190 },
+            { id: 'dst', x: 795, y: 190 }
+        ];
+
+        // Draw connecting lines
+        (function drawLinks() {
+            const svg = document.getElementById('link-svg');
+            svg.setAttribute('viewBox', '0 0 860 400');
+            for (let i = 0; i < nodes.length - 1; i++) {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', nodes[i].x);
+                line.setAttribute('y1', nodes[i].y);
+                line.setAttribute('x2', nodes[i+1].x);
+                line.setAttribute('y2', nodes[i+1].y);
+                line.setAttribute('class', 'link-line');
+                svg.appendChild(line);
+            }
+        })();
+
+        function setTTL(nodeIdx, value, expired) {
+            const ids = ['ttl-src','ttl-r1','ttl-r2','ttl-r3','ttl-dst'];
+            const el = document.getElementById(ids[nodeIdx]);
+            el.textContent = 'TTL=' + value;
+            el.className = 'ttl-badge visible' + (expired ? ' expired' : '');
+        }
+        function clearTTLs() {
+            ['ttl-src','ttl-r1','ttl-r2','ttl-r3','ttl-dst'].forEach(id => {
+                document.getElementById(id).className = 'ttl-badge';
+            });
+        }
+
+        function movePacket(fromIdx, toIdx, cls, label, duration) {
+            return new Promise(resolve => {
+                const pkt = document.getElementById('pkt');
+                const from = nodes[fromIdx];
+                const to = nodes[toIdx];
+                pkt.textContent = label;
+                pkt.className = 'packet ' + cls;
+                pkt.style.transition = 'none';
+                pkt.style.left = (from.x - 50) + 'px';
+                pkt.style.top = (from.y - 35) + 'px';
+                pkt.style.opacity = '1';
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        pkt.style.transition = `left ${duration}ms ease-in-out, top ${duration}ms ease-in-out`;
+                        pkt.style.left = (to.x - 50) + 'px';
+                        pkt.style.top = (to.y - 35) + 'px';
+                    });
+                });
+                setTimeout(resolve, duration + 50);
+            });
+        }
+
+        function hidePacket() {
+            document.getElementById('pkt').style.opacity = '0';
+        }
+
+        // Steps definition
+        const steps = [
+            {
+                title: "Initial State",
+                desc: "The source machine wants to check if the destination (<strong>93.184.216.34</strong>) is reachable. It will send an <strong>ICMP Echo Request</strong> (Type 8) packet. The packet must traverse 3 routers to reach the destination.",
+                detail: "ICMP Echo Request:\n  Type: 8  Code: 0\n  Identifier: 0x1234\n  Sequence: 0\n  Payload: 56 bytes\n  IP TTL: 64 (default on Linux)",
+                phase: "Ping — Echo Request / Reply",
+                action: () => { clearTTLs(); hidePacket(); }
+            },
+            {
+                title: "Step 1: Echo Request leaves Source (TTL=64)",
+                desc: "The source creates an ICMP Echo Request with <strong>TTL=64</strong> and sends it toward Router 1. The TTL (Time To Live) limits how many hops the packet can traverse before being discarded.",
+                detail: "IP Header:\n  Src: 192.168.1.10 → Dst: 93.184.216.34\n  TTL: 64  Protocol: ICMP (1)\n\nICMP:\n  Type: 8 (Echo Request)  Code: 0\n  ID: 0x1234  Seq: 0",
+                phase: "Ping — Echo Request / Reply",
+                action: async () => {
+                    setTTL(0, 64, false);
+                    await movePacket(0, 1, 'request', 'Echo Request', 700);
+                }
+            },
+            {
+                title: "Step 2: Router 1 forwards (TTL 64→63)",
+                desc: "Router 1 receives the packet, decrements the <strong>TTL from 64 to 63</strong>, and forwards it to Router 2. Each router decrements TTL by 1 — if it ever reaches 0, the packet is dropped and an ICMP Time Exceeded is sent back.",
+                detail: "At Router 1 (10.0.0.1):\n  TTL received: 64\n  TTL after decrement: 63  ✓ (> 0, forward)\n  Next hop → Router 2 (10.1.0.1)",
+                phase: "Ping — Echo Request / Reply",
+                action: async () => {
+                    setTTL(1, 63, false);
+                    await movePacket(1, 2, 'request', 'Echo Request', 700);
+                }
+            },
+            {
+                title: "Step 3: Router 2 forwards (TTL 63→62)",
+                desc: "Router 2 decrements <strong>TTL from 63 to 62</strong> and forwards to Router 3.",
+                detail: "At Router 2 (10.1.0.1):\n  TTL received: 63\n  TTL after decrement: 62  ✓ (> 0, forward)\n  Next hop → Router 3 (10.2.0.1)",
+                phase: "Ping — Echo Request / Reply",
+                action: async () => {
+                    setTTL(2, 62, false);
+                    await movePacket(2, 3, 'request', 'Echo Request', 700);
+                }
+            },
+            {
+                title: "Step 4: Router 3 forwards (TTL 62→61)",
+                desc: "Router 3 decrements <strong>TTL from 62 to 61</strong> and forwards the packet to the destination.",
+                detail: "At Router 3 (10.2.0.1):\n  TTL received: 62\n  TTL after decrement: 61  ✓ (> 0, forward)\n  Next hop → Destination (93.184.216.34)",
+                phase: "Ping — Echo Request / Reply",
+                action: async () => {
+                    setTTL(3, 61, false);
+                    await movePacket(3, 4, 'request', 'Echo Request', 700);
+                }
+            },
+            {
+                title: "Step 5: Destination sends Echo Reply",
+                desc: "The destination receives the Echo Request and generates an <strong>ICMP Echo Reply</strong> (Type 0). It copies the Identifier and Sequence number so the source can match request to reply. The reply travels back through the same routers.",
+                detail: "ICMP Echo Reply:\n  Type: 0 (Echo Reply)  Code: 0\n  ID: 0x1234  Seq: 0\n  IP TTL: 64 (destination's default)",
+                phase: "Ping — Echo Request / Reply",
+                action: async () => {
+                    setTTL(4, 61, false);
+                    await movePacket(4, 3, 'reply', 'Echo Reply', 600);
+                    await movePacket(3, 2, 'reply', 'Echo Reply', 600);
+                    await movePacket(2, 1, 'reply', 'Echo Reply', 600);
+                    await movePacket(1, 0, 'reply', 'Echo Reply', 600);
+                }
+            },
+            {
+                title: "Step 6: RTT measured ✓",
+                desc: "The source receives the Echo Reply and calculates the <strong>Round-Trip Time (RTT)</strong> — the time between sending the request and receiving the reply. Ping complete!",
+                detail: "64 bytes from 93.184.216.34: icmp_seq=0 ttl=52 time=24.3 ms\n\nRTT = T(reply received) - T(request sent) = 24.3 ms\n\n✅ Host is reachable!",
+                phase: "Ping — Complete!",
+                action: () => {
+                    hidePacket();
+                    document.getElementById('rtt-display').className = 'rtt-display visible';
+                }
+            },
+            // Traceroute phase
+            {
+                title: "Traceroute — How it discovers the path",
+                desc: "Traceroute sends packets with <strong>incrementing TTL values</strong> starting at 1. Each router that decrements TTL to 0 must drop the packet and send back an <strong>ICMP Time Exceeded</strong> (Type 11) message, revealing its IP address.",
+                detail: "Traceroute algorithm:\n  1. Send packet with TTL=1 → first router replies\n  2. Send packet with TTL=2 → second router replies\n  3. Send packet with TTL=3 → third router replies\n  ... until destination is reached",
+                phase: "Traceroute — TTL Expiry",
+                action: () => {
+                    clearTTLs();
+                    hidePacket();
+                    document.getElementById('rtt-display').className = 'rtt-display';
+                }
+            },
+            {
+                title: "Traceroute Step 1: TTL=1 → Router 1 discovered",
+                desc: "Source sends a packet with <strong>TTL=1</strong>. Router 1 decrements it to <strong>0</strong>, drops the packet, and sends back <strong>ICMP Time Exceeded</strong>. The source now knows hop 1 is <strong>10.0.0.1</strong>.",
+                detail: "Source sends: TTL=1\nRouter 1 (10.0.0.1): TTL 1→0 ✗ DROPPED\n  → Sends ICMP Type 11 (Time Exceeded) back to source\n\nTraceroute output:\n  1  10.0.0.1  5.4 ms",
+                phase: "Traceroute — TTL=1",
+                action: async () => {
+                    setTTL(0, 1, false);
+                    await movePacket(0, 1, 'request', 'TTL=1', 700);
+                    setTTL(1, 0, true);
+                    await movePacket(1, 0, 'ttl-expire', 'Time Exceeded', 700);
+                }
+            },
+            {
+                title: "Traceroute Step 2: TTL=2 → Router 2 discovered",
+                desc: "Source sends with <strong>TTL=2</strong>. Router 1 decrements to 1 and forwards. Router 2 decrements to <strong>0</strong>, drops, and sends <strong>Time Exceeded</strong>. Hop 2 is <strong>10.1.0.1</strong>.",
+                detail: "Source sends: TTL=2\nRouter 1: TTL 2→1 ✓ forward\nRouter 2 (10.1.0.1): TTL 1→0 ✗ DROPPED\n  → Sends ICMP Type 11 back to source\n\nTraceroute output:\n  2  10.1.0.1  12.1 ms",
+                phase: "Traceroute — TTL=2",
+                action: async () => {
+                    clearTTLs();
+                    setTTL(0, 2, false);
+                    await movePacket(0, 1, 'request', 'TTL=2', 500);
+                    setTTL(1, 1, false);
+                    await movePacket(1, 2, 'request', 'TTL=1', 500);
+                    setTTL(2, 0, true);
+                    await movePacket(2, 0, 'ttl-expire', 'Time Exceeded', 900);
+                }
+            },
+            {
+                title: "Traceroute Step 3: TTL=3 → Router 3 discovered",
+                desc: "Source sends with <strong>TTL=3</strong>. Routers 1 and 2 forward. Router 3 decrements to <strong>0</strong> and sends <strong>Time Exceeded</strong>. Hop 3 is <strong>10.2.0.1</strong>.",
+                detail: "Source sends: TTL=3\nRouter 1: TTL 3→2 ✓ forward\nRouter 2: TTL 2→1 ✓ forward\nRouter 3 (10.2.0.1): TTL 1→0 ✗ DROPPED\n  → Sends ICMP Type 11 back to source\n\nTraceroute output:\n  3  10.2.0.1  18.7 ms",
+                phase: "Traceroute — TTL=3",
+                action: async () => {
+                    clearTTLs();
+                    setTTL(0, 3, false);
+                    await movePacket(0, 1, 'request', 'TTL=3', 400);
+                    setTTL(1, 2, false);
+                    await movePacket(1, 2, 'request', 'TTL=2', 400);
+                    setTTL(2, 1, false);
+                    await movePacket(2, 3, 'request', 'TTL=1', 400);
+                    setTTL(3, 0, true);
+                    await movePacket(3, 0, 'ttl-expire', 'Time Exceeded', 1100);
+                }
+            },
+            {
+                title: "Traceroute Step 4: TTL=4 → Destination reached!",
+                desc: "Source sends with <strong>TTL=4</strong>. All routers forward successfully. The destination receives the packet and sends an <strong>Echo Reply</strong> — traceroute is complete! The full path has been mapped.",
+                detail: "Source sends: TTL=4\nRouter 1: TTL 4→3 ✓\nRouter 2: TTL 3→2 ✓\nRouter 3: TTL 2→1 ✓\nDestination: Received! → Echo Reply\n\nTraceroute output:\n  4  93.184.216.34  24.3 ms\n\n✅ Full path discovered:\n  1  10.0.0.1    (5.4 ms)\n  2  10.1.0.1    (12.1 ms)\n  3  10.2.0.1    (18.7 ms)\n  4  93.184.216.34 (24.3 ms)",
+                phase: "Traceroute — Complete!",
+                action: async () => {
+                    clearTTLs();
+                    setTTL(0, 4, false);
+                    await movePacket(0, 1, 'request', 'TTL=4', 350);
+                    setTTL(1, 3, false);
+                    await movePacket(1, 2, 'request', 'TTL=3', 350);
+                    setTTL(2, 2, false);
+                    await movePacket(2, 3, 'request', 'TTL=2', 350);
+                    setTTL(3, 1, false);
+                    await movePacket(3, 4, 'request', 'TTL=1', 350);
+                    await movePacket(4, 3, 'reply', 'Echo Reply', 300);
+                    await movePacket(3, 2, 'reply', 'Echo Reply', 300);
+                    await movePacket(2, 1, 'reply', 'Echo Reply', 300);
+                    await movePacket(1, 0, 'reply', 'Echo Reply', 300);
+                    hidePacket();
+                }
+            }
+        ];
+
+        let currentStep = 0;
+        let isAnimating = false;
+
+        function updateInfo(step) {
+            document.getElementById('step-info').innerHTML = `
+                <h3>${step.title}</h3>
+                <p>${step.desc}</p>
+                <div class="detail">${step.detail}</div>
+            `;
+            document.getElementById('phase-label').textContent = step.phase;
+        }
+
+        async function nextStep() {
+            if (isAnimating || currentStep >= steps.length) return;
+            isAnimating = true;
+            document.getElementById('btn-next').disabled = true;
+            document.getElementById('btn-auto').disabled = true;
+
+            const step = steps[currentStep];
+            updateInfo(step);
+            await step.action();
+
+            currentStep++;
+            isAnimating = false;
+            if (currentStep < steps.length) {
+                document.getElementById('btn-next').disabled = false;
+                document.getElementById('btn-auto').disabled = false;
+            }
+        }
+
+        async function autoPlay() {
+            while (currentStep < steps.length) {
+                await nextStep();
+                if (currentStep < steps.length) await new Promise(r => setTimeout(r, 600));
+            }
+        }
+
+        function resetAnimation() {
+            currentStep = 0;
+            isAnimating = false;
+            clearTTLs();
+            hidePacket();
+            document.getElementById('rtt-display').className = 'rtt-display';
+            updateInfo(steps[0]);
+            document.getElementById('btn-next').disabled = false;
+            document.getElementById('btn-auto').disabled = false;
+        }
+
+        function switchTab(name) {
+            document.querySelectorAll('.terminal-panel').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('panel-' + name).classList.remove('hidden');
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>

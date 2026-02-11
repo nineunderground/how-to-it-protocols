@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTP Request/Response Cycle — How-To IT Protocols</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0e17;
+            color: #e0e6ed;
+            min-height: 100vh;
+            padding: 30px 20px;
+        }
+        .back { color: #7b2ff7; text-decoration: none; font-size: 0.9rem; }
+        .back:hover { text-decoration: underline; }
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            margin: 20px 0 8px;
+            background: linear-gradient(135deg, #00d2ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .desc {
+            text-align: center;
+            color: #8892a4;
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Method toggle */
+        .method-toggle {
+            max-width: 800px;
+            margin: 0 auto 20px;
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
+        .method-btn {
+            padding: 6px 24px;
+            border: 1px solid #1e2a3a;
+            border-radius: 20px;
+            background: #141a26;
+            color: #8892a4;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .method-btn.active {
+            background: linear-gradient(135deg, #00d2ff, #7b2ff7);
+            color: #fff;
+            border-color: transparent;
+        }
+        .method-btn:hover:not(.active) {
+            border-color: #7b2ff7;
+            color: #e0e6ed;
+        }
+
+        /* Canvas area */
+        .canvas-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+        }
+        .diagram {
+            position: relative;
+            height: 520px;
+            background: #101620;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        /* Endpoints */
+        .endpoint {
+            position: absolute;
+            top: 30px;
+            width: 140px;
+            text-align: center;
+        }
+        .endpoint.client { left: 60px; }
+        .endpoint.server { right: 60px; }
+        .endpoint .icon { font-size: 2.5rem; margin-bottom: 6px; }
+        .endpoint .label { font-weight: 600; font-size: 1rem; }
+        .endpoint .sublabel { font-size: 0.75rem; color: #8892a4; margin-top: 2px; }
+
+        /* Vertical lines */
+        .timeline {
+            position: absolute;
+            top: 100px;
+            bottom: 30px;
+            width: 2px;
+            background: #1e2a3a;
+        }
+        .timeline.client-line { left: 130px; }
+        .timeline.server-line { right: 130px; }
+
+        /* Packets */
+        .packet {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.78rem;
+            font-weight: 600;
+            border-radius: 8px;
+            opacity: 0;
+            pointer-events: none;
+            white-space: nowrap;
+            padding: 8px 14px;
+            max-width: 320px;
+            flex-direction: column;
+            line-height: 1.4;
+        }
+        .packet.request {
+            background: rgba(0, 210, 255, 0.12);
+            border: 1px solid #00d2ff;
+            color: #00d2ff;
+        }
+        .packet.response {
+            background: rgba(0, 230, 118, 0.12);
+            border: 1px solid #00e676;
+            color: #00e676;
+        }
+        .packet.processing {
+            background: rgba(123, 47, 247, 0.15);
+            border: 1px solid #7b2ff7;
+            color: #a78bfa;
+        }
+        .packet .pkt-line {
+            font-family: 'Courier New', monospace;
+            font-size: 0.72rem;
+        }
+
+        /* State badges */
+        .state {
+            position: absolute;
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+        .state.visible { opacity: 1; }
+        .state.client-state { left: 60px; }
+        .state.server-state { right: 60px; }
+        .state.idle { background: #1f2535; color: #8892a4; }
+        .state.building { background: #1f2535; color: #00d2ff; }
+        .state.sending { background: #1f2d2f; color: #00d2ff; }
+        .state.waiting { background: #2d2a1f; color: #fbbf24; }
+        .state.received { background: #251f35; color: #a78bfa; }
+        .state.processing-state { background: #251f35; color: #a78bfa; }
+        .state.responding { background: #1f2d1f; color: #00e676; }
+        .state.complete { background: #1f2d1f; color: #00e676; }
+
+        /* Step info */
+        .step-info {
+            max-width: 800px;
+            margin: 20px auto 0;
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 24px;
+            min-height: 120px;
+        }
+        .step-info h3 { font-size: 1.1rem; margin-bottom: 8px; }
+        .step-info p { color: #8892a4; line-height: 1.6; font-size: 0.92rem; }
+        .step-info .detail {
+            margin-top: 12px;
+            padding: 12px;
+            background: #0a0e17;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: #a0aec0;
+            white-space: pre-wrap;
+        }
+
+        /* Controls */
+        .controls {
+            max-width: 800px;
+            margin: 20px auto 0;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        button {
+            padding: 10px 28px;
+            border: 1px solid #1e2a3a;
+            border-radius: 8px;
+            background: #141a26;
+            color: #e0e6ed;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover { border-color: #7b2ff7; background: #1a2236; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        button.primary { background: #7b2ff7; border-color: #7b2ff7; color: #fff; }
+        button.primary:hover { background: #6b21e8; }
+
+        /* Status codes reference */
+        .status-ref {
+            max-width: 800px;
+            margin: 30px auto 0;
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .status-ref h2 { font-size: 1.3rem; margin-bottom: 16px; }
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 10px;
+        }
+        .status-card {
+            background: #0a0e17;
+            border-radius: 8px;
+            padding: 12px;
+            border-left: 3px solid;
+        }
+        .status-card.s2xx { border-color: #00e676; }
+        .status-card.s3xx { border-color: #fbbf24; }
+        .status-card.s4xx { border-color: #f87171; }
+        .status-card.s5xx { border-color: #ff6b6b; }
+        .status-code {
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+        .s2xx .status-code { color: #00e676; }
+        .s3xx .status-code { color: #fbbf24; }
+        .s4xx .status-code { color: #f87171; }
+        .s5xx .status-code { color: #ff6b6b; }
+        .status-name { font-size: 0.82rem; color: #8892a4; margin-top: 2px; }
+        .status-desc { font-size: 0.75rem; color: #4a5568; margin-top: 4px; }
+
+        /* Headers reference */
+        .headers-ref {
+            max-width: 800px;
+            margin: 20px auto 0;
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .headers-ref h2 { font-size: 1.3rem; margin-bottom: 16px; }
+        .header-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 10px;
+        }
+        .header-item {
+            background: #0a0e17;
+            border-radius: 8px;
+            padding: 12px;
+        }
+        .header-name {
+            font-family: 'Courier New', monospace;
+            color: #00d2ff;
+            font-size: 0.88rem;
+            font-weight: 600;
+        }
+        .header-val {
+            font-size: 0.78rem;
+            color: #4a5568;
+            margin-top: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        .header-desc { font-size: 0.8rem; color: #8892a4; margin-top: 4px; }
+
+        /* Try it yourself */
+        .try-it {
+            max-width: 800px;
+            margin: 40px auto 0;
+        }
+        .try-it h2 { font-size: 1.5rem; margin-bottom: 8px; }
+        .try-desc { color: #8892a4; margin-bottom: 20px; font-size: 0.92rem; }
+        .terminal-tabs { display: flex; gap: 4px; margin-bottom: 0; }
+        .tab {
+            padding: 8px 20px;
+            border: 1px solid #1e2a3a;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: #101620;
+            color: #8892a4;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .tab.active { background: #141a26; color: #e0e6ed; border-color: #1e2a3a; }
+        .terminal-panel {
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 0 12px 12px 12px;
+            padding: 24px;
+        }
+        .terminal-panel.hidden { display: none; }
+        .term-step { margin-bottom: 20px; }
+        .term-step:last-child { margin-bottom: 0; }
+        .term-badge {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .get-badge { background: #1f2535; color: #00d2ff; }
+        .post-badge { background: #251f35; color: #a78bfa; }
+        .observe-badge { background: #2d2a1f; color: #fbbf24; }
+        .term-block {
+            background: #0a0e17;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+        }
+        .term-header { font-size: 0.82rem; color: #8892a4; margin-bottom: 8px; }
+        .term-block pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #e0e6ed;
+        }
+        .term-block .prompt { color: #4ade80; }
+        .term-block .comment { color: #4a5568; }
+        .term-output {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #1e2a3a;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: #8892a4;
+            white-space: pre-wrap;
+        }
+        .term-note {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: rgba(123, 47, 247, 0.08);
+            border-left: 3px solid #7b2ff7;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.85rem;
+            color: #a0aec0;
+        }
+        .term-note code {
+            background: #0a0e17;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.82rem;
+        }
+
+        /* GET vs POST comparison */
+        .comparison {
+            max-width: 800px;
+            margin: 30px auto 0;
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .comparison h2 { font-size: 1.3rem; margin-bottom: 16px; }
+        .compare-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        @media (max-width: 600px) {
+            .compare-grid { grid-template-columns: 1fr; }
+            .status-grid { grid-template-columns: 1fr 1fr; }
+        }
+        .compare-col {
+            background: #0a0e17;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .compare-col h3 {
+            font-family: 'Courier New', monospace;
+            font-size: 1rem;
+            margin-bottom: 10px;
+        }
+        .compare-col.get h3 { color: #00d2ff; }
+        .compare-col.post h3 { color: #a78bfa; }
+        .compare-col ul {
+            list-style: none;
+            font-size: 0.85rem;
+            color: #8892a4;
+        }
+        .compare-col li {
+            padding: 4px 0;
+            padding-left: 16px;
+            position: relative;
+        }
+        .compare-col li::before {
+            content: '›';
+            position: absolute;
+            left: 0;
+            color: #4a5568;
+        }
+        .compare-col pre {
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.78rem;
+            color: #8892a4;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <a href="../" class="back">← Back to protocols</a>
+    <h1>🌐 HTTP Request / Response</h1>
+    <p class="desc">How a browser communicates with a web server — constructing a request, sending it, and processing the response.</p>
+
+    <div class="method-toggle">
+        <button class="method-btn active" onclick="switchMethod('GET')">GET</button>
+        <button class="method-btn" onclick="switchMethod('POST')">POST</button>
+    </div>
+
+    <div class="canvas-wrapper">
+        <div class="diagram" id="diagram">
+            <div class="endpoint client">
+                <div class="icon">🌍</div>
+                <div class="label">Browser</div>
+                <div class="sublabel">Client</div>
+            </div>
+            <div class="endpoint server">
+                <div class="icon">🖥️</div>
+                <div class="label">Server</div>
+                <div class="sublabel">example.com:443</div>
+            </div>
+
+            <div class="timeline client-line"></div>
+            <div class="timeline server-line"></div>
+
+            <div class="state idle client-state visible" id="client-state" style="top: 105px;">IDLE</div>
+            <div class="state idle server-state visible" id="server-state" style="top: 105px;">LISTENING</div>
+
+            <!-- Packets -->
+            <div class="packet request" id="pkt-request">
+                <span class="pkt-line" id="pkt-req-line1">GET /index.html HTTP/1.1</span>
+                <span class="pkt-line" id="pkt-req-line2">Host: example.com</span>
+            </div>
+            <div class="packet processing" id="pkt-process">
+                <span class="pkt-line">⚙️ Processing...</span>
+            </div>
+            <div class="packet response" id="pkt-response">
+                <span class="pkt-line" id="pkt-res-line1">HTTP/1.1 200 OK</span>
+                <span class="pkt-line" id="pkt-res-line2">Content-Type: text/html</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="step-info" id="step-info">
+        <h3>Ready to start</h3>
+        <p>Click <strong>Next Step</strong> to walk through the HTTP request/response cycle. Toggle between <strong>GET</strong> and <strong>POST</strong> above to see the differences.</p>
+        <div class="detail">HTTP (HyperText Transfer Protocol) is a stateless request-response protocol. The client sends a request; the server returns a response with a status code, headers, and body.</div>
+    </div>
+
+    <div class="controls">
+        <button id="btn-reset" onclick="resetAnimation()">↺ Reset</button>
+        <button id="btn-next" class="primary" onclick="nextStep()">Next Step →</button>
+        <button id="btn-auto" onclick="autoPlay()">▶ Auto Play</button>
+    </div>
+
+    <!-- GET vs POST comparison -->
+    <div class="comparison">
+        <h2>📊 GET vs POST</h2>
+        <div class="compare-grid">
+            <div class="compare-col get">
+                <h3>GET</h3>
+                <ul>
+                    <li>Retrieve data from server</li>
+                    <li>Parameters in URL query string</li>
+                    <li>Cacheable &amp; bookmarkable</li>
+                    <li>No request body (typically)</li>
+                    <li>Idempotent &amp; safe</li>
+                </ul>
+                <pre>GET /search?q=hello HTTP/1.1
+Host: example.com
+Accept: text/html</pre>
+            </div>
+            <div class="compare-col post">
+                <h3>POST</h3>
+                <ul>
+                    <li>Send data to server</li>
+                    <li>Parameters in request body</li>
+                    <li>Not cached by default</li>
+                    <li>Has a request body</li>
+                    <li>Not idempotent</li>
+                </ul>
+                <pre>POST /api/login HTTP/1.1
+Host: example.com
+Content-Type: application/json
+
+{"user":"admin","pass":"***"}</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Codes -->
+    <div class="status-ref">
+        <h2>📋 Common Status Codes</h2>
+        <div class="status-grid">
+            <div class="status-card s2xx">
+                <div class="status-code">200</div>
+                <div class="status-name">OK</div>
+                <div class="status-desc">Request succeeded</div>
+            </div>
+            <div class="status-card s2xx">
+                <div class="status-code">201</div>
+                <div class="status-name">Created</div>
+                <div class="status-desc">Resource created (POST)</div>
+            </div>
+            <div class="status-card s2xx">
+                <div class="status-code">204</div>
+                <div class="status-name">No Content</div>
+                <div class="status-desc">Success, empty body</div>
+            </div>
+            <div class="status-card s3xx">
+                <div class="status-code">301</div>
+                <div class="status-name">Moved Permanently</div>
+                <div class="status-desc">URL changed forever</div>
+            </div>
+            <div class="status-card s3xx">
+                <div class="status-code">304</div>
+                <div class="status-name">Not Modified</div>
+                <div class="status-desc">Use cached version</div>
+            </div>
+            <div class="status-card s4xx">
+                <div class="status-code">400</div>
+                <div class="status-name">Bad Request</div>
+                <div class="status-desc">Malformed request</div>
+            </div>
+            <div class="status-card s4xx">
+                <div class="status-code">401</div>
+                <div class="status-name">Unauthorized</div>
+                <div class="status-desc">Auth required</div>
+            </div>
+            <div class="status-card s4xx">
+                <div class="status-code">403</div>
+                <div class="status-name">Forbidden</div>
+                <div class="status-desc">Access denied</div>
+            </div>
+            <div class="status-card s4xx">
+                <div class="status-code">404</div>
+                <div class="status-name">Not Found</div>
+                <div class="status-desc">Resource doesn't exist</div>
+            </div>
+            <div class="status-card s5xx">
+                <div class="status-code">500</div>
+                <div class="status-name">Internal Server Error</div>
+                <div class="status-desc">Server crashed</div>
+            </div>
+            <div class="status-card s5xx">
+                <div class="status-code">502</div>
+                <div class="status-name">Bad Gateway</div>
+                <div class="status-desc">Upstream failure</div>
+            </div>
+            <div class="status-card s5xx">
+                <div class="status-code">503</div>
+                <div class="status-name">Service Unavailable</div>
+                <div class="status-desc">Server overloaded</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Headers reference -->
+    <div class="headers-ref">
+        <h2>📨 Common Headers</h2>
+        <div class="header-list">
+            <div class="header-item">
+                <div class="header-name">Content-Type</div>
+                <div class="header-val">text/html; charset=utf-8</div>
+                <div class="header-desc">MIME type of the body</div>
+            </div>
+            <div class="header-item">
+                <div class="header-name">Authorization</div>
+                <div class="header-val">Bearer eyJhbGci...</div>
+                <div class="header-desc">Auth credentials / token</div>
+            </div>
+            <div class="header-item">
+                <div class="header-name">Cookie</div>
+                <div class="header-val">session=abc123</div>
+                <div class="header-desc">Client sends stored cookies</div>
+            </div>
+            <div class="header-item">
+                <div class="header-name">Cache-Control</div>
+                <div class="header-val">max-age=3600, public</div>
+                <div class="header-desc">Caching directives</div>
+            </div>
+            <div class="header-item">
+                <div class="header-name">Accept</div>
+                <div class="header-val">text/html, application/json</div>
+                <div class="header-desc">Preferred response formats</div>
+            </div>
+            <div class="header-item">
+                <div class="header-name">User-Agent</div>
+                <div class="header-val">Mozilla/5.0 ...</div>
+                <div class="header-desc">Client software identifier</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Try it yourself -->
+    <div class="try-it" id="try-it">
+        <h2>🧪 Try It Yourself</h2>
+        <p class="try-desc">Make HTTP requests from your terminal and inspect the full request/response headers.</p>
+
+        <div class="terminal-tabs">
+            <button class="tab active" onclick="switchTab('curl')">curl</button>
+            <button class="tab" onclick="switchTab('wget')">wget</button>
+            <button class="tab" onclick="switchTab('httpie')">HTTPie</button>
+        </div>
+
+        <div class="terminal-panel" id="panel-curl">
+            <div class="term-step">
+                <span class="term-badge get-badge">GET request with verbose output</span>
+                <div class="term-block">
+                    <div class="term-header">See the full HTTP conversation</div>
+                    <pre><code><span class="prompt">$</span> curl -v https://httpbin.org/get</code></pre>
+                    <div class="term-output">&gt; GET /get HTTP/2
+&gt; Host: httpbin.org
+&gt; User-Agent: curl/8.1.2
+&gt; Accept: */*
+&gt;
+&lt; HTTP/2 200
+&lt; content-type: application/json
+&lt; content-length: 256
+&lt;
+{
+  "headers": { "Host": "httpbin.org", ... },
+  "origin": "203.0.113.1",
+  "url": "https://httpbin.org/get"
+}</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge post-badge">POST request with JSON body</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> curl -v -X POST https://httpbin.org/post \
+     -H "Content-Type: application/json" \
+     -d '{"name":"Alice","age":30}'</code></pre>
+                    <div class="term-output">&gt; POST /post HTTP/2
+&gt; Content-Type: application/json
+&gt; Content-Length: 24
+&gt;
+&lt; HTTP/2 200
+&lt; content-type: application/json
+{"data": "{\"name\":\"Alice\",\"age\":30}", ...}</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge observe-badge">Headers only</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> curl -I https://example.com  <span class="comment"># HEAD request — headers only</span></code></pre>
+                    <div class="term-output">HTTP/2 200
+content-type: text/html; charset=UTF-8
+content-length: 1256
+cache-control: max-age=604800
+etag: "3147526947"</div>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> Lines starting with <code>&gt;</code> are the request; lines with <code>&lt;</code> are the response. Use <code>-s</code> for silent mode, <code>-o /dev/null</code> to discard the body.
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-wget">
+            <div class="term-step">
+                <span class="term-badge get-badge">GET with full headers</span>
+                <div class="term-block">
+                    <div class="term-header">wget shows response headers with -S</div>
+                    <pre><code><span class="prompt">$</span> wget -S -O /dev/null https://httpbin.org/get 2>&1</code></pre>
+                    <div class="term-output">  HTTP/1.1 200 OK
+  Content-Type: application/json
+  Content-Length: 256
+  Connection: keep-alive
+  Access-Control-Allow-Origin: *</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge post-badge">POST with wget</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> wget -S -O- --post-data='{"name":"Alice"}' \
+     --header="Content-Type: application/json" \
+     https://httpbin.org/post 2>&1</code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> <code>-S</code> prints response headers, <code>-O-</code> outputs body to stdout. wget is great for downloading; for API testing, curl or HTTPie are more ergonomic.
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-httpie">
+            <div class="term-step">
+                <span class="term-badge get-badge">GET — clean &amp; colorized</span>
+                <div class="term-block">
+                    <div class="term-header">HTTPie shows formatted, colorized output by default</div>
+                    <pre><code><span class="prompt">$</span> http GET https://httpbin.org/get</code></pre>
+                    <div class="term-output">HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+    "headers": {
+        "Host": "httpbin.org",
+        "User-Agent": "HTTPie/3.2.1"
+    },
+    "url": "https://httpbin.org/get"
+}</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge post-badge">POST — JSON by default</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> http POST https://httpbin.org/post name=Alice age:=30</code></pre>
+                    <div class="term-output"><span class="comment"># HTTPie auto-sets Content-Type: application/json</span>
+<span class="comment"># := sends as number, = sends as string</span></div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge observe-badge">Verbose mode</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> http -v https://httpbin.org/get  <span class="comment"># shows request AND response</span></code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Install:</strong> <code>pip install httpie</code> or <code>brew install httpie</code>. It's the friendliest HTTP client for humans.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentMethod = 'GET';
+
+        const stepsGET = [
+            {
+                title: "Initial State",
+                desc: "The browser is idle, ready to make a request. The server is listening on port 443 (HTTPS) for incoming connections.",
+                detail: "Client: Idle (user enters URL or clicks a link)\nServer: Listening on port 443\n\nHTTP is a request-response protocol.\nThe client always initiates the conversation.",
+                clientState: { text: "IDLE", cls: "idle" },
+                serverState: { text: "LISTENING", cls: "idle" },
+            },
+            {
+                title: "Step 1: Client constructs GET request",
+                desc: "The browser builds an HTTP request with <strong>method</strong> (GET), <strong>path</strong> (/index.html), <strong>HTTP version</strong>, and <strong>headers</strong> like Host, User-Agent, Accept, and Cookie.",
+                detail: "GET /index.html HTTP/1.1\nHost: example.com\nUser-Agent: Mozilla/5.0\nAccept: text/html,application/xhtml+xml\nAccept-Language: en-US,en;q=0.9\nAccept-Encoding: gzip, deflate, br\nCookie: session=abc123; theme=dark\nConnection: keep-alive",
+                clientState: { text: "BUILDING", cls: "building" },
+                serverState: { text: "LISTENING", cls: "idle" },
+                anim: 'build-request'
+            },
+            {
+                title: "Step 2: Request travels to server",
+                desc: "The request is sent over the TCP connection (already established via 3-way handshake + TLS). It travels through the network to reach the server.",
+                detail: "The request is serialized as plain text (HTTP/1.1) or\nbinary frames (HTTP/2) and sent over TLS.\n\nNetwork path: Browser → OS → NIC → Router →\n  ... Internet ... → Server NIC → OS → Web Server",
+                clientState: { text: "WAITING", cls: "waiting" },
+                serverState: { text: "RECEIVED", cls: "received" },
+                anim: 'send-request'
+            },
+            {
+                title: "Step 3: Server processes request",
+                desc: "The server receives the request, parses the method and path, looks up the resource, runs any application logic, and prepares the response.",
+                detail: "Server processing pipeline:\n  1. Parse request line: GET /index.html HTTP/1.1\n  2. Parse headers (Host, Cookie, etc.)\n  3. Route: /index.html → static file handler\n  4. Check auth (Cookie: session=abc123)\n  5. Read file from disk or cache\n  6. Build response with status code and headers",
+                clientState: { text: "WAITING", cls: "waiting" },
+                serverState: { text: "PROCESSING", cls: "processing-state" },
+                anim: 'processing'
+            },
+            {
+                title: "Step 4: Server sends response",
+                desc: "The server sends back a response with <strong>status line</strong> (HTTP/1.1 200 OK), <strong>headers</strong> (Content-Type, Cache-Control), and the <strong>body</strong> (HTML content).",
+                detail: "HTTP/1.1 200 OK\nContent-Type: text/html; charset=utf-8\nContent-Length: 1256\nCache-Control: max-age=3600\nETag: \"3147526947\"\nSet-Cookie: visited=true; Path=/\nConnection: keep-alive\n\n<!DOCTYPE html>\n<html>...</html>",
+                clientState: { text: "RECEIVING", cls: "responding" },
+                serverState: { text: "RESPONDING", cls: "responding" },
+                anim: 'send-response'
+            },
+            {
+                title: "Step 5: Client renders response",
+                desc: "The browser receives the response, checks the status code (200 = success), parses headers, and renders the HTML body. The cycle is complete!",
+                detail: "Browser processing:\n  1. Check status: 200 OK ✅\n  2. Read Content-Type → text/html\n  3. Check Cache-Control → cache for 1 hour\n  4. Store Set-Cookie → visited=true\n  5. Parse HTML and render the page\n  6. Fetch sub-resources (CSS, JS, images)\n     → Each triggers a new HTTP request cycle!",
+                clientState: { text: "COMPLETE", cls: "complete" },
+                serverState: { text: "LISTENING", cls: "idle" },
+                anim: 'complete'
+            }
+        ];
+
+        const stepsPOST = [
+            {
+                title: "Initial State",
+                desc: "The browser is ready to send form data or an API request. The server is listening for incoming connections.",
+                detail: "Client: Idle (user submits a form or JS calls fetch())\nServer: Listening on port 443\n\nPOST requests include a body with data to send.",
+                clientState: { text: "IDLE", cls: "idle" },
+                serverState: { text: "LISTENING", cls: "idle" },
+            },
+            {
+                title: "Step 1: Client constructs POST request",
+                desc: "The browser builds a POST request with a <strong>request body</strong> containing form data or JSON. The <strong>Content-Type</strong> header tells the server how to parse the body.",
+                detail: "POST /api/login HTTP/1.1\nHost: example.com\nContent-Type: application/json\nContent-Length: 42\nAccept: application/json\nCookie: csrf=xyz789\nX-CSRF-Token: xyz789\nOrigin: https://example.com\n\n{\"username\":\"alice\",\"password\":\"s3cur3!\"}",
+                clientState: { text: "BUILDING", cls: "building" },
+                serverState: { text: "LISTENING", cls: "idle" },
+                anim: 'build-request'
+            },
+            {
+                title: "Step 2: Request travels to server",
+                desc: "The POST request — including headers AND body — is sent over the network. The <strong>Content-Length</strong> header tells the server how many bytes to expect in the body.",
+                detail: "Unlike GET, POST includes a message body after headers.\nThe blank line separates headers from body.\n\nPOST /api/login HTTP/1.1\\r\\n\nHost: example.com\\r\\n\nContent-Type: application/json\\r\\n\nContent-Length: 42\\r\\n\n\\r\\n                          ← blank line\n{\"username\":\"alice\"...}    ← body (42 bytes)",
+                clientState: { text: "WAITING", cls: "waiting" },
+                serverState: { text: "RECEIVED", cls: "received" },
+                anim: 'send-request'
+            },
+            {
+                title: "Step 3: Server processes request",
+                desc: "The server reads the body, validates the JSON, checks credentials against the database, creates a session, and prepares a response.",
+                detail: "Server processing pipeline:\n  1. Parse: POST /api/login HTTP/1.1\n  2. Read Content-Type: application/json\n  3. Read body: {\"username\":\"alice\",...}\n  4. Validate CSRF token ✅\n  5. Query DB: SELECT * FROM users WHERE...\n  6. Verify password hash ✅\n  7. Create session token\n  8. Build response with Set-Cookie",
+                clientState: { text: "WAITING", cls: "waiting" },
+                serverState: { text: "PROCESSING", cls: "processing-state" },
+                anim: 'processing'
+            },
+            {
+                title: "Step 4: Server sends response",
+                desc: "The server responds with <strong>200 OK</strong> (or <strong>201 Created</strong> for new resources). A <strong>Set-Cookie</strong> header establishes the session.",
+                detail: "HTTP/1.1 200 OK\nContent-Type: application/json\nSet-Cookie: session=new_token_abc; HttpOnly; Secure\nX-Request-Id: req_7f8a9b\n\n{\"status\":\"ok\",\"user\":{\"id\":1,\"name\":\"alice\"}}",
+                clientState: { text: "RECEIVING", cls: "responding" },
+                serverState: { text: "RESPONDING", cls: "responding" },
+                anim: 'send-response'
+            },
+            {
+                title: "Step 5: Client processes response",
+                desc: "The browser stores the session cookie, processes the JSON response, and updates the UI (e.g., redirects to dashboard).",
+                detail: "Browser processing:\n  1. Check status: 200 OK ✅\n  2. Store Set-Cookie: session=new_token_abc\n     (HttpOnly — JS can't access it)\n  3. Parse JSON body\n  4. Application logic: redirect to /dashboard\n  5. Next request includes Cookie: session=new_token_abc",
+                clientState: { text: "COMPLETE", cls: "complete" },
+                serverState: { text: "LISTENING", cls: "idle" },
+                anim: 'complete'
+            }
+        ];
+
+        let currentStep = 0;
+        let isAnimating = false;
+        const clientLineX = 131;
+
+        function getServerLineX() {
+            return document.getElementById('diagram').offsetWidth - 131;
+        }
+
+        function getSteps() {
+            return currentMethod === 'GET' ? stepsGET : stepsPOST;
+        }
+
+        function switchMethod(method) {
+            currentMethod = method;
+            document.querySelectorAll('.method-btn').forEach(b => {
+                b.classList.toggle('active', b.textContent === method);
+            });
+            // Update packet labels
+            if (method === 'GET') {
+                document.getElementById('pkt-req-line1').textContent = 'GET /index.html HTTP/1.1';
+                document.getElementById('pkt-req-line2').textContent = 'Host: example.com';
+            } else {
+                document.getElementById('pkt-req-line1').textContent = 'POST /api/login HTTP/1.1';
+                document.getElementById('pkt-req-line2').textContent = 'Content-Type: application/json';
+            }
+            resetAnimation();
+        }
+
+        function animatePacket(pktId, direction, yPos) {
+            return new Promise(resolve => {
+                const pkt = document.getElementById(pktId);
+                const serverX = getServerLineX();
+                const startX = direction === 'right' ? clientLineX + 10 : serverX - pkt.offsetWidth - 10;
+                const endX = direction === 'right' ? serverX - pkt.offsetWidth - 10 : clientLineX + 10;
+
+                pkt.style.transition = 'none';
+                pkt.style.top = yPos + 'px';
+                pkt.style.left = startX + 'px';
+                pkt.style.opacity = '1';
+
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        pkt.style.transition = 'left 1.2s ease-in-out';
+                        pkt.style.left = endX + 'px';
+                    });
+                });
+
+                setTimeout(resolve, 1300);
+            });
+        }
+
+        function showPacketAt(pktId, x, yPos) {
+            return new Promise(resolve => {
+                const pkt = document.getElementById(pktId);
+                pkt.style.transition = 'none';
+                pkt.style.top = yPos + 'px';
+                pkt.style.left = x + 'px';
+                pkt.style.opacity = '0';
+                requestAnimationFrame(() => {
+                    pkt.style.transition = 'opacity 0.5s';
+                    pkt.style.opacity = '1';
+                });
+                setTimeout(resolve, 600);
+            });
+        }
+
+        function pulsePacket(pktId) {
+            return new Promise(resolve => {
+                const pkt = document.getElementById(pktId);
+                pkt.style.transition = 'transform 0.3s';
+                pkt.style.transform = 'scale(1.08)';
+                setTimeout(() => {
+                    pkt.style.transform = 'scale(1)';
+                    setTimeout(resolve, 400);
+                }, 300);
+            });
+        }
+
+        function hideAllPackets() {
+            ['pkt-request', 'pkt-process', 'pkt-response'].forEach(id => {
+                const el = document.getElementById(id);
+                el.style.transition = 'none';
+                el.style.opacity = '0';
+                el.style.transform = 'scale(1)';
+            });
+        }
+
+        function updateStates(step) {
+            const cs = document.getElementById('client-state');
+            const ss = document.getElementById('server-state');
+            cs.textContent = step.clientState.text;
+            cs.className = `state client-state visible ${step.clientState.cls}`;
+            ss.textContent = step.serverState.text;
+            ss.className = `state server-state visible ${step.serverState.cls}`;
+        }
+
+        function updateInfo(step) {
+            document.getElementById('step-info').innerHTML = `
+                <h3>${step.title}</h3>
+                <p>${step.desc}</p>
+                <div class="detail">${step.detail}</div>
+            `;
+        }
+
+        async function nextStep() {
+            const steps = getSteps();
+            if (isAnimating || currentStep >= steps.length) return;
+
+            isAnimating = true;
+            document.getElementById('btn-next').disabled = true;
+            document.getElementById('btn-auto').disabled = true;
+
+            const step = steps[currentStep];
+            updateInfo(step);
+            updateStates(step);
+
+            const serverX = getServerLineX();
+
+            if (step.anim === 'build-request') {
+                await showPacketAt('pkt-request', clientLineX + 10, 170);
+                await pulsePacket('pkt-request');
+            } else if (step.anim === 'send-request') {
+                await animatePacket('pkt-request', 'right', 220);
+            } else if (step.anim === 'processing') {
+                document.getElementById('pkt-request').style.transition = 'opacity 0.3s';
+                document.getElementById('pkt-request').style.opacity = '0';
+                await showPacketAt('pkt-process', serverX - 140, 300);
+                await pulsePacket('pkt-process');
+                await pulsePacket('pkt-process');
+            } else if (step.anim === 'send-response') {
+                document.getElementById('pkt-process').style.transition = 'opacity 0.3s';
+                document.getElementById('pkt-process').style.opacity = '0';
+                await showPacketAt('pkt-response', serverX - 200, 360);
+                await new Promise(r => setTimeout(r, 200));
+                await animatePacket('pkt-response', 'left', 360);
+            } else if (step.anim === 'complete') {
+                document.getElementById('pkt-response').style.transition = 'opacity 0.5s';
+                document.getElementById('pkt-response').style.opacity = '0.5';
+            }
+
+            currentStep++;
+            isAnimating = false;
+
+            if (currentStep < steps.length) {
+                document.getElementById('btn-next').disabled = false;
+                document.getElementById('btn-auto').disabled = false;
+            } else {
+                document.getElementById('btn-next').disabled = true;
+                document.getElementById('btn-auto').disabled = true;
+            }
+        }
+
+        async function autoPlay() {
+            const steps = getSteps();
+            while (currentStep < steps.length) {
+                await nextStep();
+                if (currentStep < steps.length) {
+                    await new Promise(r => setTimeout(r, 800));
+                }
+            }
+        }
+
+        function resetAnimation() {
+            currentStep = 0;
+            isAnimating = false;
+            hideAllPackets();
+
+            const steps = getSteps();
+            updateStates(steps[0]);
+            updateInfo(steps[0]);
+
+            document.getElementById('btn-next').disabled = false;
+            document.getElementById('btn-auto').disabled = false;
+        }
+
+        function switchTab(name) {
+            document.querySelectorAll('.terminal-panel').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('panel-' + name).classList.remove('hidden');
+            event.target.classList.add('active');
+        }
+
+        // Init
+        updateStates(stepsGET[0]);
+    </script>
+</body>
+</html>

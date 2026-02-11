@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth 2.0 Authorization Code Flow — How-To IT Protocols</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0e17;
+            color: #e0e6ed;
+            min-height: 100vh;
+            padding: 30px 20px;
+        }
+        .back { color: #7b2ff7; text-decoration: none; font-size: 0.9rem; }
+        .back:hover { text-decoration: underline; }
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            margin: 20px 0 8px;
+            background: linear-gradient(135deg, #00d2ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .desc {
+            text-align: center;
+            color: #8892a4;
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+            max-width: 650px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .canvas-wrapper { max-width: 900px; margin: 0 auto; position: relative; }
+        .diagram {
+            position: relative;
+            height: 520px;
+            background: #101620;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        /* Three parties */
+        .party {
+            position: absolute;
+            top: 24px;
+            width: 140px;
+            text-align: center;
+        }
+        .party .icon { font-size: 2.2rem; margin-bottom: 4px; }
+        .party .label { font-weight: 600; font-size: 0.95rem; }
+        .party .sublabel { font-size: 0.72rem; color: #8892a4; margin-top: 2px; }
+        .party-user { left: 40px; }
+        .party-app { left: 50%; transform: translateX(-50%); }
+        .party-auth { right: 40px; }
+
+        /* Timelines */
+        .timeline {
+            position: absolute;
+            top: 100px;
+            bottom: 20px;
+            width: 2px;
+            background: #1e2a3a;
+        }
+        .tl-user { left: 110px; }
+        .tl-app { left: 50%; transform: translateX(-1px); }
+        .tl-auth { right: 110px; }
+
+        /* Packets / messages */
+        .msg {
+            position: absolute;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.78rem;
+            font-weight: 600;
+            border-radius: 8px;
+            opacity: 0;
+            pointer-events: none;
+            white-space: nowrap;
+            padding: 0 12px;
+            transition: none;
+        }
+        .msg-redirect {
+            background: rgba(0, 210, 255, 0.15);
+            border: 1px solid #00d2ff;
+            color: #00d2ff;
+        }
+        .msg-auth {
+            background: rgba(123, 47, 247, 0.15);
+            border: 1px solid #7b2ff7;
+            color: #a78bfa;
+        }
+        .msg-token {
+            background: rgba(0, 230, 118, 0.15);
+            border: 1px solid #00e676;
+            color: #00e676;
+        }
+        .msg-api {
+            background: rgba(251, 191, 36, 0.15);
+            border: 1px solid #fbbf24;
+            color: #fbbf24;
+        }
+
+        /* State badges */
+        .state-badge {
+            position: absolute;
+            font-size: 0.68rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.4s;
+            white-space: nowrap;
+        }
+        .state-badge.visible { opacity: 1; }
+        .sb-user { left: 30px; }
+        .sb-app { left: 50%; transform: translateX(-50%); }
+        .sb-auth { right: 30px; }
+        .sb-idle { background: #2d1f1f; color: #f87171; }
+        .sb-active { background: #1f2535; color: #00d2ff; }
+        .sb-waiting { background: #251f35; color: #a78bfa; }
+        .sb-success { background: #1f2d1f; color: #00e676; }
+
+        /* Step info */
+        .step-info {
+            max-width: 900px;
+            margin: 20px auto 0;
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 24px;
+            min-height: 120px;
+        }
+        .step-info h3 { font-size: 1.1rem; margin-bottom: 8px; }
+        .step-info p { color: #8892a4; line-height: 1.6; font-size: 0.92rem; }
+        .step-info .detail {
+            margin-top: 12px;
+            padding: 12px;
+            background: #0a0e17;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: #a0aec0;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Controls */
+        .controls {
+            max-width: 900px;
+            margin: 20px auto 0;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        button {
+            padding: 10px 28px;
+            border: 1px solid #1e2a3a;
+            border-radius: 8px;
+            background: #141a26;
+            color: #e0e6ed;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover { border-color: #7b2ff7; background: #1a2236; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        button.primary { background: #7b2ff7; border-color: #7b2ff7; color: #fff; }
+        button.primary:hover { background: #6b21e8; }
+
+        /* Try it yourself */
+        .try-it { max-width: 900px; margin: 40px auto 0; }
+        .try-it h2 { font-size: 1.5rem; margin-bottom: 8px; }
+        .try-desc { color: #8892a4; margin-bottom: 20px; font-size: 0.92rem; line-height: 1.6; }
+        .terminal-tabs { display: flex; gap: 4px; margin-bottom: 0; }
+        .tab {
+            padding: 8px 20px;
+            border: 1px solid #1e2a3a;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: #101620;
+            color: #8892a4;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .tab.active { background: #141a26; color: #e0e6ed; border-color: #1e2a3a; }
+        .terminal-panel {
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 0 12px 12px 12px;
+            padding: 24px;
+        }
+        .terminal-panel.hidden { display: none; }
+        .term-step { margin-bottom: 20px; }
+        .term-step:last-child { margin-bottom: 0; }
+        .term-badge {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .google-badge { background: #1f2535; color: #00d2ff; }
+        .github-badge { background: #1f2d1f; color: #4ade80; }
+        .tip-badge { background: #2d2a1f; color: #fbbf24; }
+        .term-block {
+            background: #0a0e17;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+        }
+        .term-header { font-size: 0.82rem; color: #8892a4; margin-bottom: 8px; }
+        .term-block pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            line-height: 1.6;
+            color: #e0e6ed;
+        }
+        .term-block .prompt { color: #4ade80; }
+        .term-block .comment { color: #4a5568; }
+        .term-note {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: rgba(123, 47, 247, 0.08);
+            border-left: 3px solid #7b2ff7;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.85rem;
+            color: #a0aec0;
+            line-height: 1.6;
+        }
+        .term-note code {
+            background: #0a0e17;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.82rem;
+        }
+
+        /* Token display */
+        .token-display {
+            max-width: 900px;
+            margin: 12px auto 0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.78rem;
+            color: #4a5568;
+            font-family: 'Courier New', monospace;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .token-display span {
+            background: #141a26;
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid #1e2a3a;
+        }
+        .token-display .has-value { color: #00e676; border-color: #00e67644; }
+    </style>
+</head>
+<body>
+    <a href="../" class="back">← Back to protocols</a>
+    <h1>🔐 OAuth 2.0 Authorization Code Flow</h1>
+    <p class="desc">How an app securely obtains access to a user's data via an authorization server, without ever seeing the user's password.</p>
+
+    <div class="canvas-wrapper">
+        <div class="diagram" id="diagram">
+            <div class="party party-user">
+                <div class="icon">👤</div>
+                <div class="label">User / Browser</div>
+                <div class="sublabel">Resource Owner</div>
+            </div>
+            <div class="party party-app">
+                <div class="icon">🖥️</div>
+                <div class="label">App Server</div>
+                <div class="sublabel">myapp.com</div>
+            </div>
+            <div class="party party-auth">
+                <div class="icon">🔑</div>
+                <div class="label">Auth Provider</div>
+                <div class="sublabel">accounts.google.com</div>
+            </div>
+
+            <div class="timeline tl-user"></div>
+            <div class="timeline tl-app"></div>
+            <div class="timeline tl-auth"></div>
+
+            <div class="state-badge sb-idle sb-user visible" id="user-state" style="top:105px;">Browsing</div>
+            <div class="state-badge sb-idle sb-app visible" id="app-state" style="top:105px;">Idle</div>
+            <div class="state-badge sb-idle sb-auth visible" id="auth-state" style="top:105px;">Idle</div>
+
+            <div class="msg msg-redirect" id="msg-0">🖱️ "Login with Google"</div>
+            <div class="msg msg-redirect" id="msg-1">302 → /authorize</div>
+            <div class="msg msg-auth" id="msg-2">🔒 Login & Consent</div>
+            <div class="msg msg-auth" id="msg-3">302 → /callback?code=abc123</div>
+            <div class="msg msg-token" id="msg-4">POST /token {code, secret}</div>
+            <div class="msg msg-token" id="msg-5">{ access_token: "eyJhb..." }</div>
+            <div class="msg msg-api" id="msg-6">GET /api + Bearer token</div>
+        </div>
+    </div>
+
+    <div class="token-display" id="token-display">
+        <span id="td-code">auth_code: —</span>
+        <span id="td-token">access_token: —</span>
+        <span id="td-state">state: —</span>
+    </div>
+
+    <div class="step-info" id="step-info">
+        <h3>Ready to start</h3>
+        <p>Click <strong>Next Step</strong> to walk through the OAuth 2.0 Authorization Code Flow. This is the most common and secure OAuth flow, used by apps that have a server-side backend.</p>
+        <div class="detail">Parties involved:
+• User/Browser — the person who owns the data
+• App Server — the application requesting access (myapp.com)
+• Auth Provider — the authorization server (Google, GitHub, etc.)</div>
+    </div>
+
+    <div class="controls">
+        <button id="btn-reset" onclick="resetAnimation()">↺ Reset</button>
+        <button id="btn-next" class="primary" onclick="nextStep()">Next Step →</button>
+        <button id="btn-auto" onclick="autoPlay()">▶ Auto Play</button>
+    </div>
+
+    <div class="try-it">
+        <h2>🧪 Try It Yourself</h2>
+        <p class="try-desc">You can experience the OAuth 2.0 Authorization Code Flow with real providers. Here's how to set it up with Google or GitHub.</p>
+
+        <div class="terminal-tabs">
+            <button class="tab active" onclick="switchTab('google')">Google</button>
+            <button class="tab" onclick="switchTab('github')">GitHub</button>
+            <button class="tab" onclick="switchTab('curl')">Manual (curl)</button>
+        </div>
+
+        <div class="terminal-panel" id="panel-google">
+            <div class="term-step">
+                <span class="term-badge google-badge">Step 1 — Create OAuth Credentials</span>
+                <div class="term-block">
+                    <div class="term-header">Go to Google Cloud Console</div>
+                    <pre><code>1. Visit <a href="https://console.cloud.google.com/apis/credentials" style="color:#00d2ff">console.cloud.google.com/apis/credentials</a>
+2. Create a new OAuth 2.0 Client ID
+3. Set Authorized redirect URI to:
+   <span class="prompt">http://localhost:8080/callback</span>
+4. Note your <span style="color:#00e676">client_id</span> and <span style="color:#00e676">client_secret</span></code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge google-badge">Step 2 — Start the Authorization Flow</span>
+                <div class="term-block">
+                    <div class="term-header">Open this URL in your browser (replace YOUR_CLIENT_ID)</div>
+                    <pre><code>https://accounts.google.com/o/oauth2/v2/auth?
+  client_id=<span style="color:#00e676">YOUR_CLIENT_ID</span>
+  &redirect_uri=http://localhost:8080/callback
+  &response_type=code
+  &scope=openid%20email%20profile
+  &state=random_csrf_token</code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge google-badge">Step 3 — Exchange the Code</span>
+                <div class="term-block">
+                    <div class="term-header">After consent, Google redirects to your callback with a code</div>
+                    <pre><code><span class="prompt">$</span> curl -X POST https://oauth2.googleapis.com/token \
+  -d "code=<span style="color:#a78bfa">THE_AUTH_CODE</span>" \
+  -d "client_id=YOUR_CLIENT_ID" \
+  -d "client_secret=YOUR_CLIENT_SECRET" \
+  -d "redirect_uri=http://localhost:8080/callback" \
+  -d "grant_type=authorization_code"
+
+<span class="comment"># Response: { "access_token": "ya29...", "token_type": "Bearer", ... }</span></code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> Use <code>state</code> parameter to prevent CSRF attacks. Generate a random string, send it in the auth request, and verify it matches when the callback comes back.
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-github">
+            <div class="term-step">
+                <span class="term-badge github-badge">Step 1 — Register a GitHub OAuth App</span>
+                <div class="term-block">
+                    <div class="term-header">Create an OAuth App in GitHub settings</div>
+                    <pre><code>1. Visit <a href="https://github.com/settings/developers" style="color:#4ade80">github.com/settings/developers</a>
+2. Click "New OAuth App"
+3. Set callback URL to:
+   <span class="prompt">http://localhost:8080/callback</span>
+4. Note your <span style="color:#00e676">client_id</span> and <span style="color:#00e676">client_secret</span></code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge github-badge">Step 2 — Redirect to GitHub</span>
+                <div class="term-block">
+                    <pre><code>https://github.com/login/oauth/authorize?
+  client_id=<span style="color:#00e676">YOUR_CLIENT_ID</span>
+  &redirect_uri=http://localhost:8080/callback
+  &scope=read:user%20user:email
+  &state=random_csrf_token</code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge github-badge">Step 3 — Exchange Code for Token</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> curl -X POST https://github.com/login/oauth/access_token \
+  -H "Accept: application/json" \
+  -d "client_id=YOUR_CLIENT_ID" \
+  -d "client_secret=YOUR_CLIENT_SECRET" \
+  -d "code=<span style="color:#a78bfa">THE_AUTH_CODE</span>"
+
+<span class="comment"># Response: { "access_token": "gho_xxxx", "token_type": "bearer", "scope": "read:user" }</span></code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge github-badge">Step 4 — Use the Token</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> curl -H "Authorization: Bearer <span style="color:#00e676">gho_xxxx</span>" \
+  https://api.github.com/user
+
+<span class="comment"># { "login": "your-username", "name": "Your Name", ... }</span></code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Note:</strong> GitHub's OAuth flow is one of the simplest to test. No complex console setup — just register the app and go.
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-curl">
+            <div class="term-step">
+                <span class="term-badge tip-badge">Quick Local Test with netcat</span>
+                <div class="term-block">
+                    <div class="term-header">Listen for the callback to capture the authorization code</div>
+                    <pre><code><span class="comment"># Terminal 1: Start a listener to catch the redirect</span>
+<span class="prompt">$</span> while true; do echo -e "HTTP/1.1 200 OK\r\n\r\nGot it!" | nc -l 8080; done
+
+<span class="comment"># Terminal 2: Open the auth URL in a browser</span>
+<span class="prompt">$</span> open "https://github.com/login/oauth/authorize?client_id=YOUR_ID&redirect_uri=http://localhost:8080/callback&scope=read:user"
+
+<span class="comment"># After consent, netcat shows the request with the code:</span>
+<span style="color:#a78bfa">GET /callback?code=abc123def456&state=... HTTP/1.1</span>
+
+<span class="comment"># Copy the code and exchange it:</span>
+<span class="prompt">$</span> curl -s -X POST https://github.com/login/oauth/access_token \
+  -H "Accept: application/json" \
+  -d "client_id=YOUR_ID&client_secret=YOUR_SECRET&code=<span style="color:#a78bfa">abc123def456</span>"</code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>What's happening:</strong> You're manually playing all three roles. The browser is the user, netcat is your app server catching the callback, and curl exchanges the code for a token server-to-server.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const diagram = document.getElementById('diagram');
+
+        function getXPositions() {
+            const w = diagram.offsetWidth;
+            return {
+                user: 111,
+                app: w / 2,
+                auth: w - 111
+            };
+        }
+
+        const steps = [
+            {
+                title: "Initial State",
+                desc: "The user is on <strong>myapp.com</strong> and wants to sign in using their Google account. The app has pre-registered with Google and has a <strong>client_id</strong> and <strong>client_secret</strong>.",
+                detail: "Parties:\n• User/Browser — wants to log in\n• App Server (myapp.com) — registered OAuth client\n• Auth Provider (Google) — holds user's identity\n\nThe app knows:\n  client_id:     \"myapp-123.apps.googleusercontent.com\"\n  client_secret:  \"GOCSPX-xxxxx\" (kept on server only)\n  redirect_uri:  \"https://myapp.com/callback\"",
+                userState: { text: "Browsing", cls: "sb-active" },
+                appState: { text: "Idle", cls: "sb-idle" },
+                authState: { text: "Idle", cls: "sb-idle" },
+                tokens: { code: "—", token: "—", state: "—" }
+            },
+            {
+                title: "Step 1: User clicks \"Login with Google\"",
+                desc: "The user clicks the login button on <strong>myapp.com</strong>. The app generates a random <strong>state</strong> parameter for CSRF protection and prepares the authorization URL.",
+                detail: "User action: Click \"Login with Google\" button\n\nApp generates:\n  state = \"xK9mQ2vR\" (random, stored in session)\n\nApp builds authorization URL:\n  https://accounts.google.com/o/oauth2/v2/auth?\n    client_id=myapp-123\n    &redirect_uri=https://myapp.com/callback\n    &response_type=code\n    &scope=openid email profile\n    &state=xK9mQ2vR",
+                msgId: "msg-0",
+                from: "user", to: "app",
+                yPos: 140,
+                userState: { text: "Clicking login", cls: "sb-active" },
+                appState: { text: "Generating URL", cls: "sb-active" },
+                authState: { text: "Idle", cls: "sb-idle" },
+                tokens: { code: "—", token: "—", state: "xK9mQ2vR" }
+            },
+            {
+                title: "Step 2: App redirects to Auth Server",
+                desc: "The app responds with an <strong>HTTP 302 redirect</strong> to Google's authorization endpoint. The browser follows the redirect automatically.",
+                detail: "HTTP Response from App:\n  302 Found\n  Location: https://accounts.google.com/o/oauth2/v2/auth?\n    client_id=myapp-123\n    &redirect_uri=https://myapp.com/callback\n    &response_type=code\n    &scope=openid email profile\n    &state=xK9mQ2vR\n\nBrowser follows redirect → user sees Google login page",
+                msgId: "msg-1",
+                from: "app", to: "auth",
+                yPos: 190,
+                userState: { text: "Redirected", cls: "sb-waiting" },
+                appState: { text: "Waiting", cls: "sb-waiting" },
+                authState: { text: "Auth page shown", cls: "sb-active" },
+                tokens: { code: "—", token: "—", state: "xK9mQ2vR" }
+            },
+            {
+                title: "Step 3: User authenticates & grants permission",
+                desc: "The user logs in to Google (if not already) and sees a <strong>consent screen</strong> asking: \"myapp.com wants to access your email and profile.\" The user clicks <strong>Allow</strong>.",
+                detail: "Google consent screen shows:\n  ┌──────────────────────────────────┐\n  │  myapp.com wants to:             │\n  │  ✓ See your email address        │\n  │  ✓ See your basic profile info   │\n  │                                  │\n  │  [Allow]          [Deny]         │\n  └──────────────────────────────────┘\n\nUser enters credentials (if needed) and clicks Allow.\nGoogle validates credentials and consent.",
+                msgId: "msg-2",
+                from: "auth", to: "auth",
+                yPos: 240,
+                self: true,
+                userState: { text: "Granting consent", cls: "sb-active" },
+                appState: { text: "Waiting", cls: "sb-waiting" },
+                authState: { text: "Authenticating", cls: "sb-active" },
+                tokens: { code: "—", token: "—", state: "xK9mQ2vR" }
+            },
+            {
+                title: "Step 4: Auth server redirects back with code",
+                desc: "Google generates a short-lived <strong>authorization code</strong> and redirects the user's browser back to the app's callback URL with the code and state in the query string.",
+                detail: "Google responds:\n  302 Found\n  Location: https://myapp.com/callback?\n    code=4/0AX4XfWh...abc123\n    &state=xK9mQ2vR\n\nBrowser follows redirect → hits App Server.\nApp verifies state matches session → ✓ CSRF check passed.\n\n⚠️ The authorization code is:\n  • Short-lived (typically 1-10 minutes)\n  • Single-use (can only be exchanged once)\n  • Useless without client_secret",
+                msgId: "msg-3",
+                from: "auth", to: "app",
+                yPos: 290,
+                userState: { text: "Redirected back", cls: "sb-waiting" },
+                appState: { text: "Got code!", cls: "sb-active" },
+                authState: { text: "Code issued", cls: "sb-success" },
+                tokens: { code: "4/0AX4...abc123", token: "—", state: "xK9mQ2vR ✓" }
+            },
+            {
+                title: "Step 5: App exchanges code for access token",
+                desc: "The app server makes a <strong>server-to-server</strong> POST request to Google's token endpoint, sending the authorization code along with its <strong>client_secret</strong>. This never goes through the browser.",
+                detail: "Server-to-server request (NOT through browser):\n\nPOST https://oauth2.googleapis.com/token\nContent-Type: application/x-www-form-urlencoded\n\n  grant_type=authorization_code\n  &code=4/0AX4XfWh...abc123\n  &client_id=myapp-123\n  &client_secret=GOCSPX-xxxxx    ← secret!\n  &redirect_uri=https://myapp.com/callback\n\nResponse:\n  {\n    \"access_token\": \"ya29.a0ARrdaM...eyJhbG\",\n    \"token_type\": \"Bearer\",\n    \"expires_in\": 3600,\n    \"refresh_token\": \"1//0eXy7...\",\n    \"scope\": \"openid email profile\"\n  }",
+                msgId: "msg-4",
+                from: "app", to: "auth",
+                yPos: 350,
+                userState: { text: "Waiting", cls: "sb-waiting" },
+                appState: { text: "Exchanging code", cls: "sb-active" },
+                authState: { text: "Validating", cls: "sb-active" },
+                tokens: { code: "4/0AX4...abc123 (used)", token: "—", state: "xK9mQ2vR ✓" }
+            },
+            {
+                title: "Step 6: Auth server returns access token",
+                desc: "Google validates the code and client credentials, then returns an <strong>access token</strong> (and optionally a refresh token). The authorization code is now invalidated.",
+                detail: "Token response received by App Server:\n  {\n    \"access_token\":  \"ya29.a0ARrdaM...eyJhbG\",\n    \"token_type\":    \"Bearer\",\n    \"expires_in\":    3600,\n    \"refresh_token\": \"1//0eXy7...\",\n    \"id_token\":      \"eyJhbGciOi...\" (JWT with user info)\n  }\n\n✅ App stores the access_token securely on the server.\n🔄 refresh_token can get new access_tokens without user interaction.\n❌ Authorization code is now invalid (single-use).",
+                msgId: "msg-5",
+                from: "auth", to: "app",
+                yPos: 400,
+                userState: { text: "Waiting", cls: "sb-waiting" },
+                appState: { text: "Got token!", cls: "sb-success" },
+                authState: { text: "Token issued", cls: "sb-success" },
+                tokens: { code: "— (expired)", token: "ya29...eyJhbG", state: "xK9mQ2vR ✓" }
+            },
+            {
+                title: "Step 7: App calls API with access token",
+                desc: "The app uses the access token to make authenticated API calls to Google's resource server (e.g., fetching the user's profile). The user is now logged in! 🎉",
+                detail: "API Request:\n  GET https://www.googleapis.com/oauth2/v2/userinfo\n  Authorization: Bearer ya29.a0ARrdaM...eyJhbG\n\nResponse:\n  {\n    \"id\":    \"1234567890\",\n    \"email\": \"user@gmail.com\",\n    \"name\":  \"John Doe\",\n    \"picture\": \"https://lh3.googleusercontent.com/...\"\n  }\n\n✅ User is now authenticated!\n✅ App never saw the user's Google password.\n✅ Access is scoped — app can only read what user consented to.",
+                msgId: "msg-6",
+                from: "app", to: "auth",
+                yPos: 450,
+                userState: { text: "Logged in ✓", cls: "sb-success" },
+                appState: { text: "Authenticated ✓", cls: "sb-success" },
+                authState: { text: "Serving API", cls: "sb-success" },
+                tokens: { code: "— (expired)", token: "ya29...eyJhbG ✓", state: "xK9mQ2vR ✓" }
+            }
+        ];
+
+        let currentStep = 0;
+        let isAnimating = false;
+
+        function animateMsg(step) {
+            return new Promise(resolve => {
+                const el = document.getElementById(step.msgId);
+                const pos = getXPositions();
+                const fromX = pos[step.from];
+                const toX = pos[step.to];
+
+                if (step.self) {
+                    // Self-message (loops on auth)
+                    const x = pos[step.from];
+                    el.style.top = step.yPos + 'px';
+                    el.style.left = (x - el.offsetWidth / 2) + 'px';
+                    el.style.opacity = '0';
+                    el.style.transition = 'opacity 0.6s ease';
+                    el.offsetHeight;
+                    el.style.opacity = '1';
+                    setTimeout(resolve, 800);
+                    return;
+                }
+
+                const startX = fromX < toX ? fromX + 8 : fromX - el.offsetWidth - 8;
+                const endX = fromX < toX ? toX - el.offsetWidth - 8 : toX + 8;
+
+                el.style.top = step.yPos + 'px';
+                el.style.left = startX + 'px';
+                el.style.opacity = '1';
+                el.style.transition = 'left 1s ease-in-out';
+                el.offsetHeight;
+                el.style.left = endX + 'px';
+
+                setTimeout(resolve, 1100);
+            });
+        }
+
+        function updateStates(step) {
+            const us = document.getElementById('user-state');
+            const as = document.getElementById('app-state');
+            const au = document.getElementById('auth-state');
+
+            us.textContent = step.userState.text;
+            us.className = `state-badge sb-user visible ${step.userState.cls}`;
+            as.textContent = step.appState.text;
+            as.className = `state-badge sb-app visible ${step.appState.cls}`;
+            au.textContent = step.authState.text;
+            au.className = `state-badge sb-auth visible ${step.authState.cls}`;
+
+            const t = step.tokens;
+            const tdCode = document.getElementById('td-code');
+            const tdToken = document.getElementById('td-token');
+            const tdState = document.getElementById('td-state');
+
+            tdCode.textContent = 'auth_code: ' + t.code;
+            tdCode.className = t.code !== '—' ? 'has-value' : '';
+            tdToken.textContent = 'access_token: ' + t.token;
+            tdToken.className = t.token !== '—' ? 'has-value' : '';
+            tdState.textContent = 'state: ' + t.state;
+            tdState.className = t.state !== '—' ? 'has-value' : '';
+        }
+
+        function updateInfo(step) {
+            document.getElementById('step-info').innerHTML = `
+                <h3>${step.title}</h3>
+                <p>${step.desc}</p>
+                <div class="detail">${step.detail}</div>
+            `;
+        }
+
+        async function nextStep() {
+            if (isAnimating || currentStep >= steps.length) return;
+            isAnimating = true;
+            document.getElementById('btn-next').disabled = true;
+            document.getElementById('btn-auto').disabled = true;
+
+            const step = steps[currentStep];
+            updateInfo(step);
+            updateStates(step);
+
+            if (step.msgId) {
+                await animateMsg(step);
+            }
+
+            currentStep++;
+            isAnimating = false;
+
+            if (currentStep < steps.length) {
+                document.getElementById('btn-next').disabled = false;
+                document.getElementById('btn-auto').disabled = false;
+            }
+        }
+
+        async function autoPlay() {
+            while (currentStep < steps.length) {
+                await nextStep();
+                if (currentStep < steps.length) {
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+            }
+        }
+
+        function resetAnimation() {
+            currentStep = 0;
+            isAnimating = false;
+
+            for (let i = 0; i < 7; i++) {
+                const el = document.getElementById('msg-' + i);
+                el.style.transition = 'none';
+                el.style.opacity = '0';
+            }
+
+            updateStates(steps[0]);
+            updateInfo(steps[0]);
+
+            document.getElementById('btn-next').disabled = false;
+            document.getElementById('btn-auto').disabled = false;
+        }
+
+        function switchTab(name) {
+            document.querySelectorAll('.terminal-panel').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('panel-' + name).classList.remove('hidden');
+            event.target.classList.add('active');
+        }
+
+        updateStates(steps[0]);
+    </script>
+</body>
+</html>

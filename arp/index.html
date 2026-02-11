@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARP Protocol — How-To IT Protocols</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0e17;
+            color: #e0e6ed;
+            min-height: 100vh;
+            padding: 30px 20px;
+        }
+        .back { color: #7b2ff7; text-decoration: none; font-size: 0.9rem; }
+        .back:hover { text-decoration: underline; }
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            margin: 20px 0 8px;
+            background: linear-gradient(135deg, #00d2ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .desc {
+            text-align: center;
+            color: #8892a4;
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+            max-width: 650px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .canvas-wrapper { max-width: 800px; margin: 0 auto; }
+        .diagram {
+            position: relative;
+            height: 520px;
+            background: #101620;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        /* Devices */
+        .device {
+            position: absolute;
+            text-align: center;
+            width: 120px;
+            transition: opacity 0.3s;
+        }
+        .device .icon { font-size: 2.2rem; margin-bottom: 4px; }
+        .device .label { font-weight: 600; font-size: 0.85rem; }
+        .device .ip { font-size: 0.72rem; color: #8892a4; margin-top: 2px; }
+        .device .mac { font-size: 0.68rem; color: #4a5568; margin-top: 1px; font-family: 'Courier New', monospace; }
+
+        /* Source device (bottom center) */
+        .device.source { bottom: 30px; left: 50%; transform: translateX(-50%); }
+        /* Target devices (top row) */
+        .device.d1 { top: 30px; left: 60px; }
+        .device.d2 { top: 30px; left: 50%; transform: translateX(-50%); }
+        .device.d3 { top: 30px; right: 60px; }
+
+        /* Switch in the middle */
+        .switch-box {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1a2236;
+            border: 1px solid #1e2a3a;
+            border-radius: 10px;
+            padding: 8px 20px;
+            font-size: 0.8rem;
+            color: #8892a4;
+            text-align: center;
+        }
+        .switch-box .sw-icon { font-size: 1.4rem; }
+
+        /* Connection lines */
+        .lines-svg {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+        }
+        .conn-line {
+            stroke: #1e2a3a;
+            stroke-width: 1.5;
+            fill: none;
+        }
+
+        /* Packet bubble */
+        .packet {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.78rem;
+            font-weight: 600;
+            border-radius: 8px;
+            opacity: 0;
+            pointer-events: none;
+            white-space: nowrap;
+            padding: 6px 14px;
+            transition: none;
+            z-index: 10;
+        }
+        .packet.broadcast {
+            background: rgba(251, 191, 36, 0.15);
+            border: 1px solid #fbbf24;
+            color: #fbbf24;
+        }
+        .packet.reply {
+            background: rgba(0, 230, 118, 0.15);
+            border: 1px solid #00e676;
+            color: #00e676;
+        }
+
+        /* ARP table */
+        .arp-table {
+            position: absolute;
+            bottom: 30px;
+            right: 20px;
+            background: #0a0e17;
+            border: 1px solid #1e2a3a;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.72rem;
+            color: #8892a4;
+            min-width: 200px;
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+        .arp-table.visible { opacity: 1; }
+        .arp-table .title { color: #00d2ff; font-weight: 600; margin-bottom: 6px; font-size: 0.75rem; }
+        .arp-table .entry { color: #4ade80; margin-top: 3px; }
+
+        /* Highlight ring on matching device */
+        .device.highlight .icon {
+            filter: drop-shadow(0 0 10px #00e676);
+        }
+        .device.dim { opacity: 0.35; }
+
+        /* State badge */
+        .state-badge {
+            position: absolute;
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.4s;
+            z-index: 5;
+        }
+        .state-badge.visible { opacity: 1; }
+        .state-badge.broadcast-state { background: #2d2a1f; color: #fbbf24; }
+        .state-badge.reply-state { background: #1f2d1f; color: #4ade80; }
+        .state-badge.idle-state { background: #1f2535; color: #00d2ff; }
+
+        /* Step info */
+        .step-info {
+            max-width: 800px;
+            margin: 20px auto 0;
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 24px;
+            min-height: 120px;
+        }
+        .step-info h3 { font-size: 1.1rem; margin-bottom: 8px; }
+        .step-info p { color: #8892a4; line-height: 1.6; font-size: 0.92rem; }
+        .step-info .detail {
+            margin-top: 12px;
+            padding: 12px;
+            background: #0a0e17;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: #a0aec0;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        /* Controls */
+        .controls {
+            max-width: 800px;
+            margin: 20px auto 0;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        button {
+            padding: 10px 28px;
+            border: 1px solid #1e2a3a;
+            border-radius: 8px;
+            background: #141a26;
+            color: #e0e6ed;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover { border-color: #7b2ff7; background: #1a2236; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        button.primary { background: #7b2ff7; border-color: #7b2ff7; color: #fff; }
+        button.primary:hover { background: #6b21e8; }
+
+        /* Try it yourself */
+        .try-it { max-width: 800px; margin: 40px auto 0; }
+        .try-it h2 { font-size: 1.5rem; margin-bottom: 8px; }
+        .try-desc { color: #8892a4; margin-bottom: 20px; font-size: 0.92rem; }
+        .terminal-tabs { display: flex; gap: 4px; margin-bottom: 0; }
+        .tab {
+            padding: 8px 20px;
+            border: 1px solid #1e2a3a;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: #101620;
+            color: #8892a4;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .tab.active { background: #141a26; color: #e0e6ed; border-color: #1e2a3a; }
+        .terminal-panel {
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 0 12px 12px 12px;
+            padding: 24px;
+        }
+        .terminal-panel.hidden { display: none; }
+        .term-step { margin-bottom: 20px; }
+        .term-step:last-child { margin-bottom: 0; }
+        .term-badge {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .linux-badge { background: #1f2d1f; color: #4ade80; }
+        .windows-badge { background: #1f2535; color: #00d2ff; }
+        .observe-badge { background: #2d2a1f; color: #fbbf24; }
+        .term-block {
+            background: #0a0e17;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+        }
+        .term-header { font-size: 0.82rem; color: #8892a4; margin-bottom: 8px; }
+        .term-block pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #e0e6ed;
+        }
+        .term-block .prompt { color: #4ade80; }
+        .term-block .comment { color: #4a5568; }
+        .term-output {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #1e2a3a;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: #8892a4;
+            white-space: pre;
+        }
+        .term-note {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: rgba(123, 47, 247, 0.08);
+            border-left: 3px solid #7b2ff7;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.85rem;
+            color: #a0aec0;
+        }
+        .term-note code {
+            background: #0a0e17;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.82rem;
+        }
+    </style>
+</head>
+<body>
+    <a href="../" class="back">← Back to protocols</a>
+    <h1>📡 ARP — Address Resolution Protocol</h1>
+    <p class="desc">How a device discovers the MAC address of another device on the local network by broadcasting an ARP request.</p>
+
+    <div class="canvas-wrapper">
+        <div class="diagram" id="diagram">
+            <!-- Connection lines -->
+            <svg class="lines-svg" id="lines-svg"></svg>
+
+            <!-- Devices on the LAN -->
+            <div class="device d1" id="dev-d1">
+                <div class="icon">💻</div>
+                <div class="label">Device A</div>
+                <div class="ip">192.168.1.10</div>
+                <div class="mac">AA:AA:AA:00:00:0A</div>
+            </div>
+            <div class="device d2" id="dev-d2">
+                <div class="icon">🖥️</div>
+                <div class="label">Router</div>
+                <div class="ip">192.168.1.1</div>
+                <div class="mac">BB:BB:BB:00:00:01</div>
+            </div>
+            <div class="device d3" id="dev-d3">
+                <div class="icon">💻</div>
+                <div class="label">Device C</div>
+                <div class="ip">192.168.1.20</div>
+                <div class="mac">CC:CC:CC:00:00:14</div>
+            </div>
+
+            <!-- Switch -->
+            <div class="switch-box" id="switch-box">
+                <div class="sw-icon">🔀</div>
+                Switch
+            </div>
+
+            <!-- Source device -->
+            <div class="device source" id="dev-source">
+                <div class="icon">💻</div>
+                <div class="label">Your PC</div>
+                <div class="ip">192.168.1.100</div>
+                <div class="mac">DD:DD:DD:00:00:64</div>
+            </div>
+
+            <!-- State badges -->
+            <div class="state-badge idle-state" id="badge-source" style="bottom: 130px; left: 50%; transform: translateX(-50%);">IDLE</div>
+
+            <!-- Packet elements -->
+            <div class="packet broadcast" id="pkt-broadcast">ARP Request: Who has 192.168.1.1?</div>
+            <div class="packet broadcast" id="pkt-bcast-d1">Who has 192.168.1.1?</div>
+            <div class="packet broadcast" id="pkt-bcast-d2">Who has 192.168.1.1?</div>
+            <div class="packet broadcast" id="pkt-bcast-d3">Who has 192.168.1.1?</div>
+            <div class="packet reply" id="pkt-reply">ARP Reply: 192.168.1.1 is at BB:BB:BB:00:00:01</div>
+
+            <!-- ARP Table -->
+            <div class="arp-table" id="arp-table">
+                <div class="title">ARP Table (Your PC)</div>
+                <div style="color:#4a5568;">(empty)</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="step-info" id="step-info">
+        <h3>Ready to start</h3>
+        <p>Click <strong>Next Step</strong> to walk through how ARP resolves an IP address to a MAC address on a local network.</p>
+        <div class="detail">ARP operates at Layer 2 (Data Link) and is used when a device
+knows the IP address of a destination on the same LAN
+but needs its MAC address to construct an Ethernet frame.</div>
+    </div>
+
+    <div class="controls">
+        <button id="btn-reset" onclick="resetAnimation()">↺ Reset</button>
+        <button id="btn-next" class="primary" onclick="nextStep()">Next Step →</button>
+        <button id="btn-auto" onclick="autoPlay()">▶ Auto Play</button>
+    </div>
+
+    <!-- Try it yourself -->
+    <div class="try-it">
+        <h2>🧪 Try It Yourself</h2>
+        <p class="try-desc">Inspect and manipulate the ARP table on your own machine using common CLI tools.</p>
+
+        <div class="terminal-tabs">
+            <button class="tab active" onclick="switchTab('linux')">Linux</button>
+            <button class="tab" onclick="switchTab('windows')">Windows</button>
+            <button class="tab" onclick="switchTab('tcpdump')">tcpdump</button>
+        </div>
+
+        <div class="terminal-panel" id="panel-linux">
+            <div class="term-step">
+                <span class="term-badge linux-badge">View ARP Table</span>
+                <div class="term-block">
+                    <div class="term-header">Show the current ARP cache</div>
+                    <pre><code><span class="prompt">$</span> ip neigh show</code></pre>
+                    <div class="term-output">192.168.1.1 dev eth0 lladdr bb:bb:bb:00:00:01 REACHABLE
+192.168.1.10 dev eth0 lladdr aa:aa:aa:00:00:0a STALE</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge linux-badge">Trigger ARP Request</span>
+                <div class="term-block">
+                    <div class="term-header">Ping a local IP to trigger ARP resolution</div>
+                    <pre><code><span class="prompt">$</span> ping -c 1 192.168.1.20
+<span class="comment"># Then check the ARP table again:</span>
+<span class="prompt">$</span> ip neigh show</code></pre>
+                    <div class="term-output">192.168.1.20 dev eth0 lladdr cc:cc:cc:00:00:14 REACHABLE</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge linux-badge">Send Manual ARP Request</span>
+                <div class="term-block">
+                    <div class="term-header">Use arping to send ARP directly</div>
+                    <pre><code><span class="prompt">#</span> sudo arping -c 1 192.168.1.1</code></pre>
+                    <div class="term-output">ARPING 192.168.1.1 from 192.168.1.100 eth0
+Unicast reply from 192.168.1.1 [BB:BB:BB:00:00:01] 0.823ms</div>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> Use <code>ip neigh flush all</code> (as root) to clear the ARP cache and observe fresh ARP requests.
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-windows">
+            <div class="term-step">
+                <span class="term-badge windows-badge">View ARP Table</span>
+                <div class="term-block">
+                    <div class="term-header">Display the ARP cache</div>
+                    <pre><code><span class="prompt">C:\></span> arp -a</code></pre>
+                    <div class="term-output">Interface: 192.168.1.100 --- 0xc
+  Internet Address    Physical Address    Type
+  192.168.1.1         bb-bb-bb-00-00-01   dynamic
+  192.168.1.10        aa-aa-aa-00-00-0a   dynamic
+  192.168.1.255       ff-ff-ff-ff-ff-ff   static</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge windows-badge">Clear ARP Cache</span>
+                <div class="term-block">
+                    <div class="term-header">Delete the ARP cache (run as Administrator)</div>
+                    <pre><code><span class="prompt">C:\></span> arp -d *
+<span class="comment">REM Then ping to trigger fresh ARP:</span>
+<span class="prompt">C:\></span> ping 192.168.1.1</code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> Use <code>arp -s 192.168.1.50 aa-bb-cc-dd-ee-ff</code> to add a static ARP entry (useful for preventing ARP spoofing on critical hosts).
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-tcpdump">
+            <div class="term-step">
+                <span class="term-badge observe-badge">Capture ARP Packets</span>
+                <div class="term-block">
+                    <div class="term-header">Watch ARP traffic in real time</div>
+                    <pre><code><span class="prompt">#</span> sudo tcpdump -i eth0 -nn arp</code></pre>
+                    <div class="term-output">09:22:01 ARP, Request who-has 192.168.1.1 tell 192.168.1.100, length 28
+09:22:01 ARP, Reply 192.168.1.1 is-at bb:bb:bb:00:00:01, length 28</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge observe-badge">Verbose Mode</span>
+                <div class="term-block">
+                    <div class="term-header">See full Ethernet frame details</div>
+                    <pre><code><span class="prompt">#</span> sudo tcpdump -i eth0 -nn -e arp</code></pre>
+                    <div class="term-output">09:22:01 dd:dd:dd:00:00:64 > ff:ff:ff:ff:ff:ff, ARP, Request who-has 192.168.1.1 tell 192.168.1.100, length 28
+09:22:01 bb:bb:bb:00:00:01 > dd:dd:dd:00:00:64, ARP, Reply 192.168.1.1 is-at bb:bb:bb:00:00:01, length 28</div>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Note:</strong> The ARP Request is sent to <code>ff:ff:ff:ff:ff:ff</code> (broadcast). The Reply is sent unicast directly back to the requester's MAC address.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Layout positions (computed on init)
+        let positions = {};
+
+        function computePositions() {
+            const dw = document.getElementById('diagram').offsetWidth;
+            const dh = document.getElementById('diagram').offsetHeight;
+            positions = {
+                source: { x: dw / 2, y: dh - 55 },
+                sw: { x: dw / 2, y: dh / 2 },
+                d1: { x: 120, y: 75 },
+                d2: { x: dw / 2, y: 75 },
+                d3: { x: dw - 120, y: 75 }
+            };
+        }
+
+        function drawLines() {
+            computePositions();
+            const svg = document.getElementById('lines-svg');
+            const p = positions;
+            svg.innerHTML = `
+                <line class="conn-line" x1="${p.source.x}" y1="${p.source.y}" x2="${p.sw.x}" y2="${p.sw.y}"/>
+                <line class="conn-line" x1="${p.sw.x}" y1="${p.sw.y}" x2="${p.d1.x}" y2="${p.d1.y}"/>
+                <line class="conn-line" x1="${p.sw.x}" y1="${p.sw.y}" x2="${p.d2.x}" y2="${p.d2.y}"/>
+                <line class="conn-line" x1="${p.sw.x}" y1="${p.sw.y}" x2="${p.d3.x}" y2="${p.d3.y}"/>
+            `;
+        }
+
+        function animateEl(el, fromX, fromY, toX, toY, duration) {
+            return new Promise(resolve => {
+                el.style.transition = 'none';
+                el.style.left = fromX + 'px';
+                el.style.top = fromY + 'px';
+                el.style.opacity = '1';
+                el.style.transform = 'translate(-50%, -50%)';
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        el.style.transition = `left ${duration}ms ease-in-out, top ${duration}ms ease-in-out`;
+                        el.style.left = toX + 'px';
+                        el.style.top = toY + 'px';
+                    });
+                });
+                setTimeout(resolve, duration + 50);
+            });
+        }
+
+        function hideEl(el) {
+            el.style.transition = 'opacity 0.3s';
+            el.style.opacity = '0';
+        }
+
+        const steps = [
+            {
+                title: "Initial State — Need to Reach 192.168.1.1",
+                desc: "Your PC (192.168.1.100) wants to send a packet to <strong>192.168.1.1</strong> (the router). It checks its ARP table but finds <strong>no entry</strong> for that IP. It needs to discover the MAC address first.",
+                detail: "Your PC's ARP Table:\n  (empty)\n\nDestination IP: 192.168.1.1\nRequired:       MAC address → ???\n\nThe OS must send an ARP Request before it can\nconstruct the Ethernet frame.",
+                action: async () => {
+                    setBadge('badge-source', 'ARP NEEDED', 'broadcast-state');
+                    showArpTable(false);
+                }
+            },
+            {
+                title: "Step 1 — ARP Request Broadcast",
+                desc: "Your PC crafts an <strong>ARP Request</strong> and sends it as an Ethernet <strong>broadcast</strong> (destination MAC: <code>FF:FF:FF:FF:FF:FF</code>). The frame reaches the switch, which floods it to all ports.",
+                detail: "Ethernet Frame:\n  Src MAC:  DD:DD:DD:00:00:64 (Your PC)\n  Dst MAC:  FF:FF:FF:FF:FF:FF (Broadcast)\n  Type:     0x0806 (ARP)\n\nARP Header:\n  Operation:    1 (Request)\n  Sender MAC:   DD:DD:DD:00:00:64\n  Sender IP:    192.168.1.100\n  Target MAC:   00:00:00:00:00:00 (unknown)\n  Target IP:    192.168.1.1",
+                action: async () => {
+                    const p = positions;
+                    const pkt = document.getElementById('pkt-broadcast');
+                    await animateEl(pkt, p.source.x, p.source.y, p.sw.x, p.sw.y, 800);
+                    hideEl(pkt);
+                }
+            },
+            {
+                title: "Step 2 — Switch Floods to All Devices",
+                desc: "The switch receives the broadcast frame and <strong>floods</strong> it out all ports (except the source). Every device on the LAN receives the ARP Request asking: <em>\"Who has 192.168.1.1? Tell 192.168.1.100\"</em>.",
+                detail: "Switch behavior:\n  Broadcast frame → flood to all ports\n\nAll devices receive the ARP Request:\n  • Device A (192.168.1.10)  → receives\n  • Router   (192.168.1.1)   → receives\n  • Device C (192.168.1.20)  → receives",
+                action: async () => {
+                    const p = positions;
+                    const b1 = document.getElementById('pkt-bcast-d1');
+                    const b2 = document.getElementById('pkt-bcast-d2');
+                    const b3 = document.getElementById('pkt-bcast-d3');
+                    await Promise.all([
+                        animateEl(b1, p.sw.x, p.sw.y, p.d1.x, p.d1.y, 800),
+                        animateEl(b2, p.sw.x, p.sw.y, p.d2.x, p.d2.y, 800),
+                        animateEl(b3, p.sw.x, p.sw.y, p.d3.x, p.d3.y, 800),
+                    ]);
+                    hideEl(b1); hideEl(b2); hideEl(b3);
+                }
+            },
+            {
+                title: "Step 3 — Non-matching Devices Ignore",
+                desc: "Device A (192.168.1.10) and Device C (192.168.1.20) see the request but their IP <strong>doesn't match</strong> 192.168.1.1. They silently <strong>drop</strong> the ARP Request. Only the Router matches.",
+                detail: "Device A (192.168.1.10):\n  Target IP 192.168.1.1 ≠ my IP → DROP\n\nDevice C (192.168.1.20):\n  Target IP 192.168.1.1 ≠ my IP → DROP\n\nRouter (192.168.1.1):\n  Target IP 192.168.1.1 = my IP → MATCH! → prepare reply",
+                action: async () => {
+                    document.getElementById('dev-d1').classList.add('dim');
+                    document.getElementById('dev-d3').classList.add('dim');
+                    document.getElementById('dev-d2').classList.add('highlight');
+                }
+            },
+            {
+                title: "Step 4 — Router Sends ARP Reply (Unicast)",
+                desc: "The Router responds with an <strong>ARP Reply</strong> containing its MAC address <code>BB:BB:BB:00:00:01</code>. This reply is sent <strong>unicast</strong> — directly to Your PC's MAC address, not broadcast.",
+                detail: "Ethernet Frame:\n  Src MAC:  BB:BB:BB:00:00:01 (Router)\n  Dst MAC:  DD:DD:DD:00:00:64 (Your PC)\n  Type:     0x0806 (ARP)\n\nARP Header:\n  Operation:    2 (Reply)\n  Sender MAC:   BB:BB:BB:00:00:01\n  Sender IP:    192.168.1.1\n  Target MAC:   DD:DD:DD:00:00:64\n  Target IP:    192.168.1.100",
+                action: async () => {
+                    const p = positions;
+                    const pkt = document.getElementById('pkt-reply');
+                    await animateEl(pkt, p.d2.x, p.d2.y, p.sw.x, p.sw.y, 700);
+                    await animateEl(pkt, p.sw.x, p.sw.y, p.source.x, p.source.y, 700);
+                    hideEl(pkt);
+                }
+            },
+            {
+                title: "Step 5 — ARP Table Updated",
+                desc: "Your PC receives the reply and <strong>caches</strong> the mapping <code>192.168.1.1 → BB:BB:BB:00:00:01</code> in its ARP table. Now it can construct Ethernet frames to the router. The entry will expire after a timeout (typically 20-300 seconds depending on OS).",
+                detail: "ARP Table (Your PC) — updated:\n  192.168.1.1   BB:BB:BB:00:00:01   dynamic\n\n✅ MAC address resolved! Your PC can now send\n   IP packets to 192.168.1.1 via Ethernet.\n\nEntry TTL: ~60s (Linux) / ~120-300s (Windows)\nRefreshed on use; removed when expired.",
+                action: async () => {
+                    document.getElementById('dev-d1').classList.remove('dim');
+                    document.getElementById('dev-d3').classList.remove('dim');
+                    document.getElementById('dev-d2').classList.remove('highlight');
+                    setBadge('badge-source', 'RESOLVED ✅', 'reply-state');
+                    showArpTable(true);
+                }
+            }
+        ];
+
+        let currentStep = 0;
+        let isAnimating = false;
+
+        function setBadge(id, text, cls) {
+            const el = document.getElementById(id);
+            el.textContent = text;
+            el.className = `state-badge visible ${cls}`;
+        }
+
+        function showArpTable(filled) {
+            const tbl = document.getElementById('arp-table');
+            tbl.classList.add('visible');
+            if (filled) {
+                tbl.innerHTML = `
+                    <div class="title">ARP Table (Your PC)</div>
+                    <div class="entry">192.168.1.1 → BB:BB:BB:00:00:01</div>
+                    <div style="color:#4a5568;margin-top:2px;font-size:0.68rem;">type: dynamic | expires: 60s</div>
+                `;
+            }
+        }
+
+        function updateInfo(step) {
+            document.getElementById('step-info').innerHTML = `
+                <h3>${step.title}</h3>
+                <p>${step.desc}</p>
+                <div class="detail">${step.detail}</div>
+            `;
+        }
+
+        async function nextStep() {
+            if (isAnimating || currentStep >= steps.length) return;
+            isAnimating = true;
+            document.getElementById('btn-next').disabled = true;
+            document.getElementById('btn-auto').disabled = true;
+
+            const step = steps[currentStep];
+            updateInfo(step);
+            await step.action();
+
+            currentStep++;
+            isAnimating = false;
+            document.getElementById('btn-next').disabled = currentStep >= steps.length;
+            document.getElementById('btn-auto').disabled = currentStep >= steps.length;
+        }
+
+        async function autoPlay() {
+            while (currentStep < steps.length) {
+                await nextStep();
+                if (currentStep < steps.length) await new Promise(r => setTimeout(r, 1000));
+            }
+        }
+
+        function resetAnimation() {
+            currentStep = 0;
+            isAnimating = false;
+
+            ['pkt-broadcast','pkt-bcast-d1','pkt-bcast-d2','pkt-bcast-d3','pkt-reply'].forEach(id => {
+                const el = document.getElementById(id);
+                el.style.transition = 'none';
+                el.style.opacity = '0';
+            });
+
+            document.getElementById('dev-d1').classList.remove('dim');
+            document.getElementById('dev-d3').classList.remove('dim');
+            document.getElementById('dev-d2').classList.remove('highlight');
+
+            const badge = document.getElementById('badge-source');
+            badge.className = 'state-badge';
+            badge.style.opacity = '0';
+
+            const tbl = document.getElementById('arp-table');
+            tbl.classList.remove('visible');
+            tbl.innerHTML = `<div class="title">ARP Table (Your PC)</div><div style="color:#4a5568;">(empty)</div>`;
+
+            document.getElementById('step-info').innerHTML = `
+                <h3>Ready to start</h3>
+                <p>Click <strong>Next Step</strong> to walk through how ARP resolves an IP address to a MAC address on a local network.</p>
+                <div class="detail">ARP operates at Layer 2 (Data Link) and is used when a device
+knows the IP address of a destination on the same LAN
+but needs its MAC address to construct an Ethernet frame.</div>
+            `;
+
+            document.getElementById('btn-next').disabled = false;
+            document.getElementById('btn-auto').disabled = false;
+        }
+
+        function switchTab(name) {
+            document.querySelectorAll('.terminal-panel').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('panel-' + name).classList.remove('hidden');
+            event.target.classList.add('active');
+        }
+
+        // Init
+        drawLines();
+        window.addEventListener('resize', drawLines);
+    </script>
+</body>
+</html>

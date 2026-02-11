@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>How-To IT Protocols</title>
+    <title>Packet by Packet — Interactive IT Protocol Explainers</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -27,12 +27,13 @@
             color: #8892a4;
             font-size: 1.1rem;
             margin-bottom: 50px;
+            text-align: center;
         }
         .protocols {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 24px;
-            max-width: 900px;
+            max-width: 1000px;
             width: 100%;
         }
         .card {
@@ -51,46 +52,120 @@
             box-shadow: 0 8px 30px rgba(123, 47, 247, 0.15);
         }
         .card h2 {
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             margin-bottom: 8px;
             color: #fff;
         }
         .card p {
             color: #8892a4;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             line-height: 1.5;
+        }
+        .card .tags {
+            margin-top: 14px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
         }
         .card .tag {
             display: inline-block;
-            margin-top: 14px;
             padding: 4px 12px;
             background: rgba(123, 47, 247, 0.15);
             color: #a78bfa;
             border-radius: 20px;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
         }
+        .card .tag.l2 { background: rgba(0, 210, 255, 0.12); color: #00d2ff; }
+        .card .tag.l3 { background: rgba(0, 230, 118, 0.12); color: #00e676; }
+        .card .tag.l4 { background: rgba(255, 171, 0, 0.12); color: #ffab00; }
+        .card .tag.l5 { background: rgba(123, 47, 247, 0.12); color: #a78bfa; }
+        .card .tag.l7 { background: rgba(248, 113, 113, 0.12); color: #f87171; }
         footer {
             margin-top: 60px;
             color: #4a5568;
             font-size: 0.85rem;
+            text-align: center;
         }
         footer a { color: #7b2ff7; text-decoration: none; }
+        .yt-link {
+            margin-top: 8px;
+        }
+        .yt-link a {
+            color: #f87171;
+            text-decoration: none;
+        }
+        .yt-link a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
-    <h1>🔌 How-To IT Protocols</h1>
-    <p class="subtitle">Interactive visual explainers — learn by seeing them in action</p>
+    <h1>📦 Packet by Packet</h1>
+    <p class="subtitle">Interactive visual explainers for IT protocols — learn by seeing them in action</p>
 
     <div class="protocols">
+        <a href="./arp/" class="card">
+            <h2>📡 ARP</h2>
+            <p>Address Resolution Protocol — how devices find each other's MAC addresses on a local network.</p>
+            <div class="tags"><span class="tag l2">Layer 2/3</span></div>
+        </a>
+
+        <a href="./dhcp/" class="card">
+            <h2>🏠 DHCP</h2>
+            <p>Dynamic Host Configuration — how your device automatically gets an IP address (DORA sequence).</p>
+            <div class="tags"><span class="tag l7">Application</span></div>
+        </a>
+
+        <a href="./icmp-ping/" class="card">
+            <h2>🏓 ICMP / Ping</h2>
+            <p>Echo Request & Reply — the simplest network diagnostic. Includes traceroute visualization.</p>
+            <div class="tags"><span class="tag l3">Layer 3</span></div>
+        </a>
+
         <a href="./tcp-handshake/" class="card">
             <h2>🤝 TCP 3-Way Handshake</h2>
-            <p>See how TCP connections are established between client and server with the SYN → SYN-ACK → ACK sequence.</p>
-            <span class="tag">Transport Layer</span>
+            <p>How TCP connections are established with the SYN → SYN-ACK → ACK sequence.</p>
+            <div class="tags"><span class="tag l4">Transport</span></div>
+        </a>
+
+        <a href="./dns-resolution/" class="card">
+            <h2>🔍 DNS Resolution</h2>
+            <p>Recursive lookup chain — how domain names become IP addresses through root, TLD, and authoritative servers.</p>
+            <div class="tags"><span class="tag l7">Application</span></div>
+        </a>
+
+        <a href="./tls-handshake/" class="card">
+            <h2>🔒 TLS Handshake</h2>
+            <p>TLS 1.3 — certificates, key exchange, and how HTTPS encrypts your connection.</p>
+            <div class="tags"><span class="tag l5">Session/Presentation</span></div>
+        </a>
+
+        <a href="./http-request/" class="card">
+            <h2>🌐 HTTP Request/Response</h2>
+            <p>GET & POST flows, headers, status codes, and cookies — what happens when you visit a URL.</p>
+            <div class="tags"><span class="tag l7">Application</span></div>
+        </a>
+
+        <a href="./websocket/" class="card">
+            <h2>⚡ WebSocket</h2>
+            <p>HTTP upgrade to persistent bidirectional connection — how real-time apps work.</p>
+            <div class="tags"><span class="tag l7">Application</span></div>
+        </a>
+
+        <a href="./bgp-peering/" class="card">
+            <h2>🌍 BGP Peering</h2>
+            <p>How internet providers exchange routing tables and keep the internet connected.</p>
+            <div class="tags"><span class="tag l3">Layer 3</span></div>
+        </a>
+
+        <a href="./oauth2/" class="card">
+            <h2>🔑 OAuth 2.0</h2>
+            <p>Authorization Code Flow — how "Login with Google" works behind the scenes.</p>
+            <div class="tags"><span class="tag l7">Application</span></div>
         </a>
     </div>
 
     <footer>
         <a href="https://github.com/nineunderground/how-to-it-protocols">GitHub</a> · MIT License
+        <div class="yt-link">🎬 <a href="https://www.youtube.com/@PacketbyPacket">YouTube: Packet by Packet</a></div>
     </footer>
 </body>
 </html>

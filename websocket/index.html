@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Protocol — How-To IT Protocols</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0e17;
+            color: #e0e6ed;
+            min-height: 100vh;
+            padding: 30px 20px;
+        }
+        .back { color: #7b2ff7; text-decoration: none; font-size: 0.9rem; }
+        .back:hover { text-decoration: underline; }
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            margin: 20px 0 8px;
+            background: linear-gradient(135deg, #00d2ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .desc {
+            text-align: center;
+            color: #8892a4;
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+            max-width: 650px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .canvas-wrapper { max-width: 800px; margin: 0 auto; position: relative; }
+        .diagram {
+            position: relative;
+            height: 520px;
+            background: #101620;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .endpoint {
+            position: absolute;
+            top: 25px;
+            width: 140px;
+            text-align: center;
+        }
+        .endpoint.client { left: 60px; }
+        .endpoint.server { right: 60px; }
+        .endpoint .icon { font-size: 2.5rem; margin-bottom: 6px; }
+        .endpoint .label { font-weight: 600; font-size: 1rem; }
+        .endpoint .sublabel { font-size: 0.75rem; color: #8892a4; margin-top: 2px; }
+
+        .timeline {
+            position: absolute;
+            top: 95px;
+            bottom: 20px;
+            width: 2px;
+            background: #1e2a3a;
+        }
+        .timeline.client-line { left: 130px; }
+        .timeline.server-line { right: 130px; }
+
+        /* Connection pipe - shown when WS is established */
+        .ws-pipe {
+            position: absolute;
+            top: 95px;
+            bottom: 20px;
+            left: 132px;
+            right: 132px;
+            background: rgba(0, 230, 118, 0.03);
+            border-left: 2px solid rgba(0, 230, 118, 0.3);
+            border-right: 2px solid rgba(0, 230, 118, 0.3);
+            opacity: 0;
+            transition: opacity 0.6s;
+        }
+        .ws-pipe.visible { opacity: 1; }
+        .ws-pipe-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-90deg);
+            font-size: 0.7rem;
+            color: rgba(0, 230, 118, 0.4);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .packet {
+            position: absolute;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border-radius: 8px;
+            opacity: 0;
+            pointer-events: none;
+            white-space: nowrap;
+            padding: 0 14px;
+            z-index: 10;
+        }
+        .pkt-http-req {
+            background: rgba(0, 210, 255, 0.15);
+            border: 1px solid #00d2ff;
+            color: #00d2ff;
+        }
+        .pkt-http-res {
+            background: rgba(123, 47, 247, 0.15);
+            border: 1px solid #7b2ff7;
+            color: #a78bfa;
+        }
+        .pkt-ws-client {
+            background: rgba(0, 210, 255, 0.12);
+            border: 1px solid rgba(0, 210, 255, 0.6);
+            color: #00d2ff;
+        }
+        .pkt-ws-server {
+            background: rgba(123, 47, 247, 0.12);
+            border: 1px solid rgba(123, 47, 247, 0.6);
+            color: #a78bfa;
+        }
+        .pkt-ws-client2 {
+            background: rgba(0, 230, 118, 0.12);
+            border: 1px solid rgba(0, 230, 118, 0.6);
+            color: #00e676;
+        }
+        .pkt-close {
+            background: rgba(248, 113, 113, 0.15);
+            border: 1px solid #f87171;
+            color: #f87171;
+        }
+
+        .state {
+            position: absolute;
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+        .state.visible { opacity: 1; }
+        .state.client-state { left: 60px; }
+        .state.server-state { right: 60px; }
+        .state.st-http { background: #1f2535; color: #00d2ff; }
+        .state.st-upgrade { background: #251f35; color: #a78bfa; }
+        .state.st-open { background: #1f2d1f; color: #00e676; }
+        .state.st-closing { background: #2d2a1f; color: #fbbf24; }
+        .state.st-closed { background: #2d1f1f; color: #f87171; }
+
+        .step-info {
+            max-width: 800px;
+            margin: 20px auto 0;
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 24px;
+            min-height: 120px;
+        }
+        .step-info h3 { font-size: 1.1rem; margin-bottom: 8px; }
+        .step-info p { color: #8892a4; line-height: 1.6; font-size: 0.92rem; }
+        .step-info .detail {
+            margin-top: 12px;
+            padding: 12px;
+            background: #0a0e17;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: #a0aec0;
+            white-space: pre-wrap;
+        }
+
+        .controls {
+            max-width: 800px;
+            margin: 20px auto 0;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        button {
+            padding: 10px 28px;
+            border: 1px solid #1e2a3a;
+            border-radius: 8px;
+            background: #141a26;
+            color: #e0e6ed;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover { border-color: #7b2ff7; background: #1a2236; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        button.primary { background: #7b2ff7; border-color: #7b2ff7; color: #fff; }
+        button.primary:hover { background: #6b21e8; }
+
+        /* Comparison section */
+        .compare {
+            max-width: 800px;
+            margin: 40px auto 0;
+        }
+        .compare h2 {
+            font-size: 1.5rem;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #00d2ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
+        }
+        .compare-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        @media (max-width: 600px) { .compare-grid { grid-template-columns: 1fr; } }
+        .compare-card {
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .compare-card h3 { font-size: 1rem; margin-bottom: 10px; }
+        .compare-card.bad h3 { color: #f87171; }
+        .compare-card.good h3 { color: #00e676; }
+        .compare-card p { color: #8892a4; font-size: 0.88rem; line-height: 1.6; }
+        .compare-card .mini-diagram {
+            margin-top: 12px;
+            padding: 12px;
+            background: #0a0e17;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            color: #6b7a8d;
+            line-height: 1.5;
+        }
+        .compare-card .mini-diagram .hl-bad { color: #f87171; }
+        .compare-card .mini-diagram .hl-good { color: #00e676; }
+
+        /* Try it yourself */
+        .try-it { max-width: 800px; margin: 40px auto 0; }
+        .try-it h2 { font-size: 1.5rem; margin-bottom: 8px; }
+        .try-desc { color: #8892a4; margin-bottom: 20px; font-size: 0.92rem; }
+        .terminal-tabs { display: flex; gap: 4px; margin-bottom: 0; }
+        .tab {
+            padding: 8px 20px;
+            border: 1px solid #1e2a3a;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: #101620;
+            color: #8892a4;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .tab.active { background: #141a26; color: #e0e6ed; border-color: #1e2a3a; }
+        .terminal-panel {
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 0 12px 12px 12px;
+            padding: 24px;
+        }
+        .terminal-panel.hidden { display: none; }
+        .term-step { margin-bottom: 20px; }
+        .term-step:last-child { margin-bottom: 0; }
+        .term-badge {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .server-badge { background: #1f2d1f; color: #4ade80; }
+        .client-badge { background: #1f2535; color: #00d2ff; }
+        .observe-badge { background: #2d2a1f; color: #fbbf24; }
+        .term-block {
+            background: #0a0e17;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+        }
+        .term-header { font-size: 0.82rem; color: #8892a4; margin-bottom: 8px; }
+        .term-block pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #e0e6ed;
+        }
+        .term-block .prompt { color: #4ade80; }
+        .term-block .comment { color: #4a5568; }
+        .term-output {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #1e2a3a;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: #8892a4;
+        }
+        .term-note {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: rgba(123, 47, 247, 0.08);
+            border-left: 3px solid #7b2ff7;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.85rem;
+            color: #a0aec0;
+        }
+        .term-note code {
+            background: #0a0e17;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.82rem;
+        }
+    </style>
+</head>
+<body>
+    <a href="../" class="back">← Back to protocols</a>
+    <h1>🔌 WebSocket Protocol</h1>
+    <p class="desc">Full-duplex communication over a single TCP connection. Starts as HTTP, upgrades to a persistent bidirectional channel.</p>
+
+    <div class="canvas-wrapper">
+        <div class="diagram" id="diagram">
+            <div class="endpoint client">
+                <div class="icon">💻</div>
+                <div class="label">Client</div>
+                <div class="sublabel">Browser / App</div>
+            </div>
+            <div class="endpoint server">
+                <div class="icon">🖥️</div>
+                <div class="label">Server</div>
+                <div class="sublabel">wss://api.example.com</div>
+            </div>
+
+            <div class="timeline client-line"></div>
+            <div class="timeline server-line"></div>
+
+            <div class="ws-pipe" id="ws-pipe">
+                <div class="ws-pipe-label">WebSocket Channel</div>
+            </div>
+
+            <div class="state st-http client-state visible" id="client-state" style="top:100px;">HTTP</div>
+            <div class="state st-http server-state visible" id="server-state" style="top:100px;">LISTENING</div>
+
+            <!-- Packets -->
+            <div class="packet pkt-http-req" id="pkt-upgrade">GET /ws  Upgrade: websocket</div>
+            <div class="packet pkt-http-res" id="pkt-101">101 Switching Protocols</div>
+            <div class="packet pkt-ws-client" id="pkt-msg1">📨 "Hello server!"</div>
+            <div class="packet pkt-ws-server" id="pkt-msg2">📨 "Hello client!"</div>
+            <div class="packet pkt-ws-client2" id="pkt-msg3">📦 [binary: 1.2KB]</div>
+            <div class="packet pkt-ws-server" id="pkt-msg4">📨 "Got your file!"</div>
+            <div class="packet pkt-close" id="pkt-close1">🔒 Close (1000)</div>
+            <div class="packet pkt-close" id="pkt-close2">🔒 Close (1000)</div>
+        </div>
+    </div>
+
+    <div class="step-info" id="step-info">
+        <h3>Ready to start</h3>
+        <p>Click <strong>Next Step</strong> to walk through the WebSocket protocol lifecycle — from HTTP upgrade to bidirectional messaging to graceful close.</p>
+        <div class="detail">WebSocket (RFC 6455) provides full-duplex communication channels
+over a single TCP connection. Unlike HTTP polling, both client
+and server can send messages at any time without overhead.</div>
+    </div>
+
+    <div class="controls">
+        <button id="btn-reset" onclick="resetAnimation()">↺ Reset</button>
+        <button id="btn-next" class="primary" onclick="nextStep()">Next Step →</button>
+        <button id="btn-auto" onclick="autoPlay()">▶ Auto Play</button>
+    </div>
+
+    <!-- Comparison -->
+    <div class="compare">
+        <h2>⚡ WebSocket vs HTTP Polling</h2>
+        <div class="compare-grid">
+            <div class="compare-card bad">
+                <h3>❌ HTTP Polling</h3>
+                <p>Client repeatedly asks "anything new?" — wasteful requests, high latency, new TCP+TLS handshake overhead each time.</p>
+                <div class="mini-diagram">
+Client → Server: <span class="hl-bad">GET /updates</span>  (nothing new)
+Client → Server: <span class="hl-bad">GET /updates</span>  (nothing new)
+Client → Server: <span class="hl-bad">GET /updates</span>  (nothing new)
+Client → Server: <span class="hl-bad">GET /updates</span>  → 1 new msg
+<span class="hl-bad">4 requests for 1 message. Headers sent every time (~800B each).</span>
+                </div>
+            </div>
+            <div class="compare-card good">
+                <h3>✅ WebSocket</h3>
+                <p>One upgrade handshake, then both sides send messages freely. Tiny frame overhead (2-14 bytes), instant delivery, no polling waste.</p>
+                <div class="mini-diagram">
+Client → Server: GET /ws (Upgrade)
+Server → Client: 101 Switching Protocols
+<span class="hl-good">── persistent connection ──</span>
+Server → Client: <span class="hl-good">new msg</span>  (instant, ~6 bytes overhead)
+Client → Server: <span class="hl-good">reply</span>    (instant, ~6 bytes overhead)
+<span class="hl-good">No wasted requests. Real-time both ways.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Try it yourself -->
+    <div class="try-it">
+        <h2>🧪 Try It Yourself</h2>
+        <p class="try-desc">Connect to a WebSocket server from your terminal or browser console.</p>
+
+        <div class="terminal-tabs">
+            <button class="tab active" onclick="switchTab('websocat')">websocat</button>
+            <button class="tab" onclick="switchTab('wscat')">wscat</button>
+            <button class="tab" onclick="switchTab('browser')">Browser Console</button>
+        </div>
+
+        <div class="terminal-panel" id="panel-websocat">
+            <div class="term-step">
+                <span class="term-badge client-badge">Connect to a public echo server</span>
+                <div class="term-block">
+                    <div class="term-header">Install: <code>cargo install websocat</code> or <code>brew install websocat</code></div>
+                    <pre><code><span class="prompt">$</span> websocat wss://echo.websocket.org</code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge observe-badge">Send and receive messages</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> websocat wss://echo.websocket.org
+Hello WebSocket!
+Hello WebSocket!          <span class="comment"># ← echoed back</span>
+{"type":"ping"}
+{"type":"ping"}           <span class="comment"># ← echoed back</span>
+<span class="comment"># Press Ctrl+C to close</span></code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> Use <code>websocat -v</code> for verbose output showing the HTTP upgrade headers and frame details.
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-wscat">
+            <div class="term-step">
+                <span class="term-badge client-badge">Connect with wscat (Node.js)</span>
+                <div class="term-block">
+                    <div class="term-header">Install: <code>npm install -g wscat</code></div>
+                    <pre><code><span class="prompt">$</span> wscat -c wss://echo.websocket.org</code></pre>
+                    <div class="term-output">Connected (press CTRL+C to quit)
+> Hello!
+< Hello!
+> {"action":"subscribe","channel":"updates"}
+< {"action":"subscribe","channel":"updates"}</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge server-badge">Run your own WebSocket server</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> wscat -l 8080
+<span class="comment"># In another terminal:</span>
+<span class="prompt">$</span> wscat -c ws://localhost:8080
+Connected!
+> Hi server!
+<span class="comment"># Server terminal shows: < Hi server!</span></code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> Use <code>wscat --show-ping-pong</code> to see keep-alive ping/pong frames.
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-browser">
+            <div class="term-step">
+                <span class="term-badge client-badge">Browser DevTools Console (F12)</span>
+                <div class="term-block">
+                    <pre><code><span class="comment">// Connect to an echo server</span>
+const ws = new WebSocket('wss://echo.websocket.org');
+
+ws.onopen = () => {
+  console.log('✅ Connected!');
+  ws.send('Hello from browser!');
+};
+
+ws.onmessage = (e) => {
+  console.log('📨 Received:', e.data);
+};
+
+ws.onclose = (e) => {
+  console.log('🔒 Closed:', e.code, e.reason);
+};
+
+<span class="comment">// Send more messages:</span>
+ws.send('Another message');
+ws.send(JSON.stringify({type: 'ping', ts: Date.now()}));
+
+<span class="comment">// Send binary data:</span>
+ws.send(new Blob(['binary data']));
+
+<span class="comment">// Close gracefully:</span>
+ws.close(1000, 'Done');</code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge observe-badge">Check the Network tab</span>
+                <div class="term-block">
+                    <div class="term-header">DevTools → Network → WS filter</div>
+                    <pre><code><span class="comment"># You'll see:</span>
+• Request: GET wss://echo.websocket.org
+  Status: 101 Switching Protocols
+  Headers:
+    Upgrade: websocket
+    Connection: Upgrade
+    Sec-WebSocket-Accept: ...
+
+<span class="comment"># Click the connection → Messages tab to see
+# each frame with direction, size, and timestamp.</span></code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Note:</strong> The Network tab's "Messages" sub-tab shows all WebSocket frames in real time — green arrows (↑) for sent, red (↓) for received.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CL = 131;
+        function SL() { return document.getElementById('diagram').offsetWidth - 131; }
+
+        const steps = [
+            {
+                title: "Initial State",
+                desc: "The server is listening for WebSocket connections. The client is about to initiate a connection — which starts as a regular HTTP request.",
+                detail: "WebSocket connections begin life as HTTP.\nThe client will send an HTTP GET with special\nUpgrade headers to request a protocol switch.\n\nThis is called the \"opening handshake\".",
+                clientState: { text: "HTTP", cls: "st-http" },
+                serverState: { text: "LISTENING", cls: "st-http" },
+                pipe: false
+            },
+            {
+                title: "Step 1: HTTP Upgrade Request",
+                desc: "The client sends an HTTP <strong>GET</strong> request with <strong>Upgrade: websocket</strong> and <strong>Connection: Upgrade</strong> headers, plus a random <strong>Sec-WebSocket-Key</strong> for security.",
+                detail: "GET /ws HTTP/1.1\nHost: api.example.com\nUpgrade: websocket\nConnection: Upgrade\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\nSec-WebSocket-Version: 13\nOrigin: https://example.com",
+                pkt: "pkt-upgrade", dir: "right", y: 145,
+                clientState: { text: "CONNECTING", cls: "st-upgrade" },
+                serverState: { text: "LISTENING", cls: "st-http" },
+                pipe: false
+            },
+            {
+                title: "Step 2: 101 Switching Protocols",
+                desc: "The server agrees to the upgrade and responds with <strong>HTTP 101</strong>. It echoes back a derived <strong>Sec-WebSocket-Accept</strong> key (SHA-1 hash of the client's key + a magic GUID).",
+                detail: "HTTP/1.1 101 Switching Protocols\nUpgrade: websocket\nConnection: Upgrade\nSec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\n\nFrom this point, the TCP connection is no\nlonger HTTP — it's a WebSocket connection.",
+                pkt: "pkt-101", dir: "left", y: 195,
+                clientState: { text: "OPEN", cls: "st-open" },
+                serverState: { text: "OPEN", cls: "st-open" },
+                pipe: true
+            },
+            {
+                title: "Step 3: Client sends a text frame",
+                desc: "The connection is now a <strong>full-duplex WebSocket channel</strong>. The client sends a text frame — just 2-6 bytes of overhead + the payload. No HTTP headers needed anymore!",
+                detail: "WebSocket Frame:\n  FIN: 1  (final fragment)\n  Opcode: 0x1 (text)\n  MASK: 1  (client→server must be masked)\n  Payload: \"Hello server!\"\n  Total overhead: ~6 bytes (vs ~800 bytes for HTTP)",
+                pkt: "pkt-msg1", dir: "right", y: 255,
+                clientState: { text: "OPEN", cls: "st-open" },
+                serverState: { text: "OPEN", cls: "st-open" },
+                pipe: true
+            },
+            {
+                title: "Step 4: Server sends a text frame",
+                desc: "The server can send messages <strong>at any time</strong> — no need to wait for a client request. This is true <strong>server push</strong>, not long-polling.",
+                detail: "WebSocket Frame:\n  FIN: 1  (final fragment)\n  Opcode: 0x1 (text)\n  MASK: 0  (server→client is unmasked)\n  Payload: \"Hello client!\"\n  Total overhead: ~2 bytes",
+                pkt: "pkt-msg2", dir: "left", y: 305,
+                clientState: { text: "OPEN", cls: "st-open" },
+                serverState: { text: "OPEN", cls: "st-open" },
+                pipe: true
+            },
+            {
+                title: "Step 5: Client sends binary data",
+                desc: "WebSocket supports both <strong>text</strong> (UTF-8) and <strong>binary</strong> frames. Binary is used for images, protobuf, MessagePack, or any raw bytes. Same low overhead.",
+                detail: "WebSocket Frame:\n  FIN: 1\n  Opcode: 0x2 (binary)\n  MASK: 1\n  Payload: [1228 bytes of binary data]\n  \nBinary frames are perfect for:\n  • File transfers\n  • Protocol Buffers / MessagePack\n  • Audio/video chunks\n  • Game state updates",
+                pkt: "pkt-msg3", dir: "right", y: 355,
+                clientState: { text: "OPEN", cls: "st-open" },
+                serverState: { text: "OPEN", cls: "st-open" },
+                pipe: true
+            },
+            {
+                title: "Step 6: Server acknowledges",
+                desc: "Messages flow <strong>independently in both directions</strong>. Either side can send at any time — there's no request/response pattern. This is full-duplex communication.",
+                detail: "WebSocket Frame:\n  Opcode: 0x1 (text)\n  Payload: \"Got your file!\"\n\nBoth sides can also send control frames:\n  • Ping (0x9) — keep-alive check\n  • Pong (0xA) — response to ping\n  • Close (0x8) — initiate shutdown",
+                pkt: "pkt-msg4", dir: "left", y: 395,
+                clientState: { text: "OPEN", cls: "st-open" },
+                serverState: { text: "OPEN", cls: "st-open" },
+                pipe: true
+            },
+            {
+                title: "Step 7: Close handshake — client initiates",
+                desc: "Either side can initiate closing. The client sends a <strong>Close frame</strong> with status code <strong>1000</strong> (normal closure). This is a graceful shutdown.",
+                detail: "WebSocket Close Frame:\n  Opcode: 0x8 (close)\n  Status: 1000 (Normal Closure)\n  Reason: \"Done\"\n\nCommon close codes:\n  1000 — Normal closure\n  1001 — Going away (page navigation)\n  1006 — Abnormal (no close frame received)\n  1011 — Server error",
+                pkt: "pkt-close1", dir: "right", y: 435,
+                clientState: { text: "CLOSING", cls: "st-closing" },
+                serverState: { text: "OPEN", cls: "st-open" },
+                pipe: true
+            },
+            {
+                title: "Step 8: Close handshake — server confirms",
+                desc: "The server echoes back a Close frame, confirming the shutdown. The TCP connection is then terminated. Both sides are now <strong>CLOSED</strong>.",
+                detail: "WebSocket Close Frame:\n  Opcode: 0x8 (close)\n  Status: 1000 (Normal Closure)\n\nThe close handshake ensures both sides\nagree to terminate — no data is lost.\nThe underlying TCP connection (FIN/ACK)\nis closed after the WebSocket close frames.",
+                pkt: "pkt-close2", dir: "left", y: 475,
+                clientState: { text: "CLOSED", cls: "st-closed" },
+                serverState: { text: "CLOSED", cls: "st-closed" },
+                pipe: false
+            }
+        ];
+
+        let currentStep = 0;
+        let isAnimating = false;
+
+        function animatePacket(pktId, direction, yPos) {
+            return new Promise(resolve => {
+                const pkt = document.getElementById(pktId);
+                const sl = SL();
+                const pw = pkt.offsetWidth || 200;
+                const startX = direction === 'right' ? CL + 10 : sl - pw - 10;
+                const endX = direction === 'right' ? sl - pw - 10 : CL + 10;
+
+                pkt.style.transition = 'none';
+                pkt.style.top = yPos + 'px';
+                pkt.style.left = startX + 'px';
+                pkt.style.opacity = '1';
+
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        pkt.style.transition = 'left 1s ease-in-out';
+                        pkt.style.left = endX + 'px';
+                    });
+                });
+                setTimeout(resolve, 1100);
+            });
+        }
+
+        function updateStates(step) {
+            const cs = document.getElementById('client-state');
+            const ss = document.getElementById('server-state');
+            cs.textContent = step.clientState.text;
+            cs.className = `state client-state visible ${step.clientState.cls}`;
+            ss.textContent = step.serverState.text;
+            ss.className = `state server-state visible ${step.serverState.cls}`;
+
+            const pipe = document.getElementById('ws-pipe');
+            pipe.classList.toggle('visible', !!step.pipe);
+        }
+
+        function updateInfo(step) {
+            document.getElementById('step-info').innerHTML = `
+                <h3>${step.title}</h3>
+                <p>${step.desc}</p>
+                <div class="detail">${step.detail}</div>`;
+        }
+
+        async function nextStep() {
+            if (isAnimating || currentStep >= steps.length) return;
+            isAnimating = true;
+            document.getElementById('btn-next').disabled = true;
+            document.getElementById('btn-auto').disabled = true;
+
+            const step = steps[currentStep];
+            updateInfo(step);
+            updateStates(step);
+
+            if (step.pkt) await animatePacket(step.pkt, step.dir, step.y);
+
+            currentStep++;
+            isAnimating = false;
+            document.getElementById('btn-next').disabled = currentStep >= steps.length;
+            document.getElementById('btn-auto').disabled = currentStep >= steps.length;
+        }
+
+        async function autoPlay() {
+            while (currentStep < steps.length) {
+                await nextStep();
+                if (currentStep < steps.length) await new Promise(r => setTimeout(r, 800));
+            }
+        }
+
+        function resetAnimation() {
+            currentStep = 0;
+            isAnimating = false;
+            ['pkt-upgrade','pkt-101','pkt-msg1','pkt-msg2','pkt-msg3','pkt-msg4','pkt-close1','pkt-close2'].forEach(id => {
+                const el = document.getElementById(id);
+                el.style.transition = 'none';
+                el.style.opacity = '0';
+            });
+            updateStates(steps[0]);
+            updateInfo(steps[0]);
+            document.getElementById('btn-next').disabled = false;
+            document.getElementById('btn-auto').disabled = false;
+        }
+
+        function switchTab(name) {
+            document.querySelectorAll('.terminal-panel').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('panel-' + name).classList.remove('hidden');
+            event.target.classList.add('active');
+        }
+
+        updateStates(steps[0]);
+    </script>
+</body>
+</html>
