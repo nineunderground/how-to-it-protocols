@@ -213,6 +213,104 @@
         .state.syn-received { background: #251f35; color: #a78bfa; }
         .state.established { background: #1f2d1f; color: #00e676; }
 
+        /* Try it yourself */
+        .try-it {
+            max-width: 800px;
+            margin: 40px auto 0;
+        }
+        .try-it h2 {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+        }
+        .try-desc {
+            color: #8892a4;
+            margin-bottom: 20px;
+            font-size: 0.92rem;
+        }
+        .terminal-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 0;
+        }
+        .tab {
+            padding: 8px 20px;
+            border: 1px solid #1e2a3a;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: #101620;
+            color: #8892a4;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .tab.active {
+            background: #141a26;
+            color: #e0e6ed;
+            border-color: #1e2a3a;
+        }
+        .terminal-panel {
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 0 12px 12px 12px;
+            padding: 24px;
+        }
+        .terminal-panel.hidden { display: none; }
+        .term-step { margin-bottom: 20px; }
+        .term-step:last-child { margin-bottom: 0; }
+        .term-badge {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .server-badge { background: #1f2d1f; color: #4ade80; }
+        .client-badge { background: #1f2535; color: #00d2ff; }
+        .observe-badge { background: #2d2a1f; color: #fbbf24; }
+        .term-block {
+            background: #0a0e17;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+        }
+        .term-header {
+            font-size: 0.82rem;
+            color: #8892a4;
+            margin-bottom: 8px;
+        }
+        .term-block pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #e0e6ed;
+        }
+        .term-block .prompt { color: #4ade80; }
+        .term-block .comment { color: #4a5568; }
+        .term-output {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #1e2a3a;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: #8892a4;
+        }
+        .term-note {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: rgba(123, 47, 247, 0.08);
+            border-left: 3px solid #7b2ff7;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.85rem;
+            color: #a0aec0;
+        }
+        .term-note code {
+            background: #0a0e17;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.82rem;
+        }
+
         /* Seq numbers */
         .seq-display {
             max-width: 800px;
@@ -277,6 +375,124 @@
         <button id="btn-reset" onclick="resetAnimation()">↺ Reset</button>
         <button id="btn-next" class="primary" onclick="nextStep()">Next Step →</button>
         <button id="btn-auto" onclick="autoPlay()">▶ Auto Play</button>
+    </div>
+
+    <!-- Try it yourself -->
+    <div class="try-it" id="try-it">
+        <h2>🧪 Try It Yourself</h2>
+        <p class="try-desc">Reproduce the 3-way handshake on your own machine using common CLI tools. Open two terminal windows — one for the server, one for the client.</p>
+
+        <div class="terminal-tabs">
+            <button class="tab active" onclick="switchTab('ncat')">ncat</button>
+            <button class="tab" onclick="switchTab('tcpdump')">tcpdump</button>
+            <button class="tab" onclick="switchTab('python')">Python</button>
+        </div>
+
+        <div class="terminal-panel" id="panel-ncat">
+            <div class="term-step">
+                <span class="term-badge server-badge">Terminal 1 — Server</span>
+                <div class="term-block">
+                    <div class="term-header">Start a TCP listener on port 4444</div>
+                    <pre><code><span class="prompt">$</span> ncat -l -p 4444 -v</code></pre>
+                    <div class="term-output">Ncat: Listening on 0.0.0.0:4444</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge client-badge">Terminal 2 — Client</span>
+                <div class="term-block">
+                    <div class="term-header">Connect to the server</div>
+                    <pre><code><span class="prompt">$</span> ncat -v 127.0.0.1 4444</code></pre>
+                    <div class="term-output">Ncat: Connected to 127.0.0.1:4444</div>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge observe-badge">What happened</span>
+                <div class="term-block">
+                    <div class="term-header">Behind the scenes, the OS performed the 3-way handshake:</div>
+                    <pre><code>Client → Server:  SYN        (seq=X)
+Server → Client:  SYN-ACK    (seq=Y, ack=X+1)
+Client → Server:  ACK        (seq=X+1, ack=Y+1)
+<span class="comment"># Connection established! Type text in either terminal.</span></code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> Run <code>tcpdump</code> (see next tab) in a third terminal to actually see the SYN/SYN-ACK/ACK packets in real time.
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-tcpdump">
+            <div class="term-step">
+                <span class="term-badge observe-badge">Terminal 3 — Packet Capture</span>
+                <div class="term-block">
+                    <div class="term-header">Capture TCP handshake packets on the loopback interface</div>
+                    <pre><code><span class="prompt">#</span> sudo tcpdump -i lo -nn -S port 4444</code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge client-badge">Then connect with ncat (Terminal 2)</span>
+                <div class="term-block">
+                    <div class="term-header">You'll see the handshake in tcpdump output:</div>
+                    <pre><code>09:14:22 IP 127.0.0.1.54321 > 127.0.0.1.4444: Flags [S], seq 1234567, win 65535
+09:14:22 IP 127.0.0.1.4444 > 127.0.0.1.54321: Flags [S.], seq 7654321, ack 1234568, win 65535
+09:14:22 IP 127.0.0.1.54321 > 127.0.0.1.4444: Flags [.], ack 7654322, win 65535</code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge observe-badge">Reading the flags</span>
+                <div class="term-block">
+                    <pre><code><span class="comment"># tcpdump TCP flag notation:</span>
+[S]   = SYN
+[S.]  = SYN-ACK
+[.]   = ACK
+[P.]  = PSH-ACK (data)
+[F.]  = FIN-ACK (close)
+[R]   = RST (reset)</code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Tip:</strong> Use <code>-X</code> flag to see packet contents in hex, or <code>-c 10</code> to capture only 10 packets.
+            </div>
+        </div>
+
+        <div class="terminal-panel hidden" id="panel-python">
+            <div class="term-step">
+                <span class="term-badge server-badge">Terminal 1 — Python Server</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> python3 -c "
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(('127.0.0.1', 4444))
+s.listen(1)
+print('Server listening on :4444...')
+conn, addr = s.accept()
+print(f'Connected by {addr}')
+<span class="comment"># 3-way handshake happened here!</span>
+conn.send(b'Hello from server!\n')
+conn.close()
+s.close()
+"</code></pre>
+                </div>
+            </div>
+            <div class="term-step">
+                <span class="term-badge client-badge">Terminal 2 — Python Client</span>
+                <div class="term-block">
+                    <pre><code><span class="prompt">$</span> python3 -c "
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+<span class="comment"># connect() triggers the 3-way handshake</span>
+s.connect(('127.0.0.1', 4444))
+print('Connected!')
+data = s.recv(1024)
+print(f'Received: {data.decode()}')
+s.close()
+"</code></pre>
+                </div>
+            </div>
+            <div class="term-note">
+                💡 <strong>Note:</strong> <code>socket.connect()</code> is where the OS performs the 3-way handshake under the hood. The call blocks until ESTABLISHED or times out.
+            </div>
+        </div>
     </div>
 
     <script>
@@ -446,6 +662,14 @@
 
             document.getElementById('btn-next').disabled = false;
             document.getElementById('btn-auto').disabled = false;
+        }
+
+        // Tab switching
+        function switchTab(name) {
+            document.querySelectorAll('.terminal-panel').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('panel-' + name).classList.remove('hidden');
+            event.target.classList.add('active');
         }
 
         // Init
