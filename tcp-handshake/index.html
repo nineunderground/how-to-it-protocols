@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TCP 3-Way Handshake — How-To IT Protocols</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0e17;
+            color: #e0e6ed;
+            min-height: 100vh;
+            padding: 30px 20px;
+        }
+        .back { color: #7b2ff7; text-decoration: none; font-size: 0.9rem; }
+        .back:hover { text-decoration: underline; }
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            margin: 20px 0 8px;
+            background: linear-gradient(135deg, #00d2ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .desc {
+            text-align: center;
+            color: #8892a4;
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Canvas area */
+        .canvas-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+        }
+        .diagram {
+            position: relative;
+            height: 480px;
+            background: #101620;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        /* Endpoints */
+        .endpoint {
+            position: absolute;
+            top: 30px;
+            width: 140px;
+            text-align: center;
+        }
+        .endpoint.client { left: 60px; }
+        .endpoint.server { right: 60px; }
+        .endpoint .icon {
+            font-size: 2.5rem;
+            margin-bottom: 6px;
+        }
+        .endpoint .label {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        .endpoint .sublabel {
+            font-size: 0.75rem;
+            color: #8892a4;
+            margin-top: 2px;
+        }
+
+        /* Vertical lines */
+        .timeline {
+            position: absolute;
+            top: 100px;
+            bottom: 30px;
+            width: 2px;
+            background: #1e2a3a;
+        }
+        .timeline.client-line { left: 130px; }
+        .timeline.server-line { right: 130px; }
+
+        /* Packets */
+        .packet {
+            position: absolute;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border-radius: 8px;
+            opacity: 0;
+            pointer-events: none;
+            white-space: nowrap;
+            padding: 0 16px;
+        }
+        .packet.syn {
+            background: rgba(0, 210, 255, 0.15);
+            border: 1px solid #00d2ff;
+            color: #00d2ff;
+        }
+        .packet.syn-ack {
+            background: rgba(123, 47, 247, 0.15);
+            border: 1px solid #7b2ff7;
+            color: #a78bfa;
+        }
+        .packet.ack {
+            background: rgba(0, 230, 118, 0.15);
+            border: 1px solid #00e676;
+            color: #00e676;
+        }
+
+        /* Arrow SVG overlay */
+        .arrows-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .arrow-line {
+            stroke-width: 2;
+            fill: none;
+            stroke-dasharray: 400;
+            stroke-dashoffset: 400;
+        }
+        .arrow-head {
+            opacity: 0;
+        }
+
+        /* Step info */
+        .step-info {
+            max-width: 800px;
+            margin: 20px auto 0;
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 24px;
+            min-height: 120px;
+        }
+        .step-info h3 {
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+        }
+        .step-info p {
+            color: #8892a4;
+            line-height: 1.6;
+            font-size: 0.92rem;
+        }
+        .step-info .detail {
+            margin-top: 12px;
+            padding: 12px;
+            background: #0a0e17;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: #a0aec0;
+        }
+
+        /* Controls */
+        .controls {
+            max-width: 800px;
+            margin: 20px auto 0;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        button {
+            padding: 10px 28px;
+            border: 1px solid #1e2a3a;
+            border-radius: 8px;
+            background: #141a26;
+            color: #e0e6ed;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover {
+            border-color: #7b2ff7;
+            background: #1a2236;
+        }
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        button.primary {
+            background: #7b2ff7;
+            border-color: #7b2ff7;
+            color: #fff;
+        }
+        button.primary:hover { background: #6b21e8; }
+
+        /* State badges */
+        .state {
+            position: absolute;
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+        .state.visible { opacity: 1; }
+        .state.client-state { left: 60px; }
+        .state.server-state { right: 60px; }
+        .state.closed { background: #2d1f1f; color: #f87171; }
+        .state.listen { background: #1f2d1f; color: #4ade80; }
+        .state.syn-sent { background: #1f2535; color: #00d2ff; }
+        .state.syn-received { background: #251f35; color: #a78bfa; }
+        .state.established { background: #1f2d1f; color: #00e676; }
+
+        /* Seq numbers */
+        .seq-display {
+            max-width: 800px;
+            margin: 12px auto 0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: #4a5568;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <a href="../" class="back">← Back to protocols</a>
+    <h1>🤝 TCP 3-Way Handshake</h1>
+    <p class="desc">How a TCP connection is established between a client and a server using the SYN → SYN-ACK → ACK sequence.</p>
+
+    <div class="canvas-wrapper">
+        <div class="diagram" id="diagram">
+            <!-- Endpoints -->
+            <div class="endpoint client">
+                <div class="icon">💻</div>
+                <div class="label">Client</div>
+                <div class="sublabel">192.168.1.10:54321</div>
+            </div>
+            <div class="endpoint server">
+                <div class="icon">🖥️</div>
+                <div class="label">Server</div>
+                <div class="sublabel">93.184.216.34:443</div>
+            </div>
+
+            <!-- Timelines -->
+            <div class="timeline client-line"></div>
+            <div class="timeline server-line"></div>
+
+            <!-- State badges -->
+            <div class="state closed client-state visible" id="client-state" style="top: 105px;">CLOSED</div>
+            <div class="state listen server-state visible" id="server-state" style="top: 105px;">LISTEN</div>
+
+            <!-- Arrow SVG -->
+            <svg class="arrows-svg" id="arrows-svg"></svg>
+
+            <!-- Packets (positioned by JS) -->
+            <div class="packet syn" id="pkt-syn">SYN  seq=100</div>
+            <div class="packet syn-ack" id="pkt-synack">SYN-ACK  seq=300, ack=101</div>
+            <div class="packet ack" id="pkt-ack">ACK  seq=101, ack=301</div>
+        </div>
+    </div>
+
+    <div class="seq-display">
+        <span id="client-seq">Client seq: —</span>
+        <span id="server-seq">Server seq: —</span>
+    </div>
+
+    <div class="step-info" id="step-info">
+        <h3>Ready to start</h3>
+        <p>Click <strong>Next Step</strong> to walk through the TCP 3-way handshake. Each step shows the packet exchanged, the connection state on both sides, and the sequence/acknowledgment numbers.</p>
+        <div class="detail">The 3-way handshake ensures both client and server are ready to communicate and agree on initial sequence numbers (ISN).</div>
+    </div>
+
+    <div class="controls">
+        <button id="btn-reset" onclick="resetAnimation()">↺ Reset</button>
+        <button id="btn-next" class="primary" onclick="nextStep()">Next Step →</button>
+        <button id="btn-auto" onclick="autoPlay()">▶ Auto Play</button>
+    </div>
+
+    <script>
+        const steps = [
+            {
+                id: 0,
+                title: "Initial State",
+                desc: "The server is in <strong>LISTEN</strong> state, waiting for incoming connections on port 443. The client is in <strong>CLOSED</strong> state, about to initiate a connection.",
+                detail: "Server: LISTEN (passive open)\nClient: CLOSED\n\nThe server has called bind() and listen() on its socket.\nThe client is about to call connect().",
+                clientState: { text: "CLOSED", cls: "closed" },
+                serverState: { text: "LISTEN", cls: "listen" },
+                clientSeq: "Client seq: —",
+                serverSeq: "Server seq: —"
+            },
+            {
+                id: 1,
+                title: "Step 1: Client sends SYN",
+                desc: "The client picks a random <strong>Initial Sequence Number (ISN = 100)</strong> and sends a <strong>SYN</strong> packet to the server. The SYN flag is set, telling the server: \"I want to connect.\"",
+                detail: "TCP Segment:\n  Source Port: 54321\n  Dest Port:   443\n  Seq Number:  100\n  Ack Number:  0\n  Flags:       SYN\n  Window:      65535\n\nClient state: CLOSED → SYN_SENT",
+                packet: "syn",
+                direction: "right",
+                yPos: 160,
+                clientState: { text: "SYN_SENT", cls: "syn-sent" },
+                serverState: { text: "LISTEN", cls: "listen" },
+                clientSeq: "Client seq: 100",
+                serverSeq: "Server seq: —"
+            },
+            {
+                id: 2,
+                title: "Step 2: Server sends SYN-ACK",
+                desc: "The server receives the SYN, picks its own <strong>ISN = 300</strong>, and replies with <strong>SYN-ACK</strong>. It acknowledges the client's sequence by setting <strong>ack = 101</strong> (client's seq + 1).",
+                detail: "TCP Segment:\n  Source Port: 443\n  Dest Port:   54321\n  Seq Number:  300\n  Ack Number:  101  (client ISN + 1)\n  Flags:       SYN, ACK\n  Window:      65535\n\nServer state: LISTEN → SYN_RECEIVED",
+                packet: "synack",
+                direction: "left",
+                yPos: 260,
+                clientState: { text: "SYN_SENT", cls: "syn-sent" },
+                serverState: { text: "SYN_RCVD", cls: "syn-received" },
+                clientSeq: "Client seq: 100",
+                serverSeq: "Server seq: 300"
+            },
+            {
+                id: 3,
+                title: "Step 3: Client sends ACK",
+                desc: "The client acknowledges the server's SYN by sending <strong>ACK</strong> with <strong>ack = 301</strong> (server's seq + 1). Both sides are now in <strong>ESTABLISHED</strong> state — data can flow!",
+                detail: "TCP Segment:\n  Source Port: 54321\n  Dest Port:   443\n  Seq Number:  101\n  Ack Number:  301  (server ISN + 1)\n  Flags:       ACK\n  Window:      65535\n\nClient state: SYN_SENT → ESTABLISHED\nServer state: SYN_RECEIVED → ESTABLISHED\n\n✅ Connection established! Data transfer can begin.",
+                packet: "ack",
+                direction: "right",
+                yPos: 360,
+                clientState: { text: "ESTABLISHED", cls: "established" },
+                serverState: { text: "ESTABLISHED", cls: "established" },
+                clientSeq: "Client seq: 101",
+                serverSeq: "Server seq: 301"
+            }
+        ];
+
+        let currentStep = 0;
+        let isAnimating = false;
+
+        const diagram = document.getElementById('diagram');
+        const clientLine = 131;  // x position of client timeline
+        let serverLine;
+
+        function getServerLineX() {
+            const dw = diagram.offsetWidth;
+            return dw - 131;
+        }
+
+        function animatePacket(packetId, direction, yPos) {
+            return new Promise(resolve => {
+                const pkt = document.getElementById(packetId);
+                const dw = diagram.offsetWidth;
+                serverLine = getServerLineX();
+
+                const startX = direction === 'right' ? clientLine + 10 : serverLine - pkt.offsetWidth - 10;
+                const endX = direction === 'right' ? serverLine - pkt.offsetWidth - 10 : clientLine + 10;
+
+                pkt.style.top = yPos + 'px';
+                pkt.style.left = startX + 'px';
+                pkt.style.opacity = '1';
+                pkt.style.transition = 'left 1.2s ease-in-out';
+                pkt.style.pointerEvents = 'auto';
+
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        pkt.style.left = endX + 'px';
+                    });
+                });
+
+                setTimeout(resolve, 1300);
+            });
+        }
+
+        function updateStates(step) {
+            const cs = document.getElementById('client-state');
+            const ss = document.getElementById('server-state');
+
+            cs.textContent = step.clientState.text;
+            cs.className = `state client-state visible ${step.clientState.cls}`;
+
+            ss.textContent = step.serverState.text;
+            ss.className = `state server-state visible ${step.serverState.cls}`;
+
+            document.getElementById('client-seq').textContent = step.clientSeq;
+            document.getElementById('server-seq').textContent = step.serverSeq;
+        }
+
+        function updateInfo(step) {
+            const info = document.getElementById('step-info');
+            info.innerHTML = `
+                <h3>${step.title}</h3>
+                <p>${step.desc}</p>
+                <div class="detail">${step.detail}</div>
+            `;
+        }
+
+        async function nextStep() {
+            if (isAnimating || currentStep >= steps.length) return;
+
+            isAnimating = true;
+            document.getElementById('btn-next').disabled = true;
+            document.getElementById('btn-auto').disabled = true;
+
+            const step = steps[currentStep];
+            updateInfo(step);
+            updateStates(step);
+
+            if (step.packet) {
+                const pktId = step.packet === 'syn' ? 'pkt-syn' :
+                              step.packet === 'synack' ? 'pkt-synack' : 'pkt-ack';
+                await animatePacket(pktId, step.direction, step.yPos);
+            }
+
+            currentStep++;
+            isAnimating = false;
+
+            if (currentStep < steps.length) {
+                document.getElementById('btn-next').disabled = false;
+                document.getElementById('btn-auto').disabled = false;
+            } else {
+                document.getElementById('btn-next').disabled = true;
+                document.getElementById('btn-auto').disabled = true;
+            }
+        }
+
+        async function autoPlay() {
+            while (currentStep < steps.length) {
+                await nextStep();
+                if (currentStep < steps.length) {
+                    await new Promise(r => setTimeout(r, 800));
+                }
+            }
+        }
+
+        function resetAnimation() {
+            currentStep = 0;
+            isAnimating = false;
+
+            ['pkt-syn', 'pkt-synack', 'pkt-ack'].forEach(id => {
+                const el = document.getElementById(id);
+                el.style.transition = 'none';
+                el.style.opacity = '0';
+                el.style.pointerEvents = 'none';
+            });
+
+            updateStates(steps[0]);
+            updateInfo(steps[0]);
+
+            document.getElementById('btn-next').disabled = false;
+            document.getElementById('btn-auto').disabled = false;
+        }
+
+        // Init
+        updateStates(steps[0]);
+    </script>
+</body>
+</html>

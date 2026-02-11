@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How-To IT Protocols</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0e17;
+            color: #e0e6ed;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 60px 20px;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #00d2ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            color: #8892a4;
+            font-size: 1.1rem;
+            margin-bottom: 50px;
+        }
+        .protocols {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 24px;
+            max-width: 900px;
+            width: 100%;
+        }
+        .card {
+            background: #141a26;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+            padding: 28px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        .card:hover {
+            border-color: #7b2ff7;
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(123, 47, 247, 0.15);
+        }
+        .card h2 {
+            font-size: 1.3rem;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+        .card p {
+            color: #8892a4;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+        .card .tag {
+            display: inline-block;
+            margin-top: 14px;
+            padding: 4px 12px;
+            background: rgba(123, 47, 247, 0.15);
+            color: #a78bfa;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        footer {
+            margin-top: 60px;
+            color: #4a5568;
+            font-size: 0.85rem;
+        }
+        footer a { color: #7b2ff7; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <h1>🔌 How-To IT Protocols</h1>
+    <p class="subtitle">Interactive visual explainers — learn by seeing them in action</p>
+
+    <div class="protocols">
+        <a href="./tcp-handshake/" class="card">
+            <h2>🤝 TCP 3-Way Handshake</h2>
+            <p>See how TCP connections are established between client and server with the SYN → SYN-ACK → ACK sequence.</p>
+            <span class="tag">Transport Layer</span>
+        </a>
+    </div>
+
+    <footer>
+        <a href="https://github.com/nineunderground/how-to-it-protocols">GitHub</a> · MIT License
+    </footer>
+</body>
+</html>
